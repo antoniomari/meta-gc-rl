@@ -1,8 +1,10 @@
 from collections import defaultdict
+import copy
 
 import jax
 import numpy as np
 from tqdm import trange
+import optax
 
 
 def supply_rng(f, rng=jax.random.PRNGKey(0)):
@@ -41,6 +43,9 @@ def evaluate(
     config=None,
     num_eval_episodes=50,
     num_video_episodes=0,
+    num_finetune_steps=0,
+    finetune_lr=3.e-5,
+    train_dataset=None,
     video_frame_skip=3,
     eval_temperature=0,
     eval_gaussian=None,
@@ -73,6 +78,18 @@ def evaluate(
         observation, info = env.reset(options=dict(task_id=task_id, render_goal=should_render))
         goal = info.get('goal')
         goal_frame = info.get('goal_rendered')
+
+        train_state = copy.deepcopy(agent.network)
+        opt_state = agent.network.opt_state
+        finetune_tx = optax.adam(learning_rate=finetune_lr)
+        agent = agent.replace(network=agent.network.replace(tx=finetune_tx, opt_state=opt_state))
+        finetune_stats = defaultdict(list)
+        # for RL: maybe we also update Q, maybe just the policy
+        # optionally, we can do this at every step
+        for _ in range(num_finetune_steps):
+            batch = train_dataset.active_sample(config['batch_size'], observation, goal)
+            agent, info = agent.update(batch)
+            add_to(finetune_stats, flatten(info))
 
         done = False
         step = 0
@@ -112,6 +129,9 @@ def evaluate(
         else:
             renders.append(np.array(render))
 
+        agent = agent.replace(network=train_state)
+
+    stats.update({'finetune/' + k: v for k, v in finetune_stats.items()})
     for k, v in stats.items():
         stats[k] = np.mean(v)
 

@@ -277,6 +277,37 @@ class GCDataset:
 
         return goal_idxs
 
+    def active_sample(self, batch_size: int, obs, goal):
+        finetune_bs = int(batch_size * self.config.finetune_ratio)
+        uniform_batch = self.sample(batch_size - finetune_bs)
+        radius = 2.0
+        ep_len = np.where(self.dataset['terminals'])[0][0].item() + 2
+        _obs = self.dataset['observations'].reshape(-1, ep_len, obs.shape[-1])
+        assert self.dataset['terminals'].reshape(-1, ep_len)[:, :-2].sum() == 0
+        dist_to_start = ((_obs - obs)**2).sum(-1)
+        start_id = np.argmin(dist_to_start, -1)
+        dist_to_goal = ((_obs - goal)**2).sum(-1)
+        goal_id = np.argmin(dist_to_goal, -1)
+        bad_trajs = (dist_to_start.min(-1) + dist_to_goal.min(-1)) > 2*radius
+        bad_trajs = np.logical_or(bad_trajs, (start_id > goal_id))
+        # lower score is better
+        score = goal_id - start_id
+        score[bad_trajs] += 2*ep_len
+        best = np.argsort(score)[:10]
+        ep_idx = np.random.choice(best, finetune_bs)
+        step_idx = np.random.uniform(size=finetune_bs) * (goal_id[ep_idx] - start_id[ep_idx]) + start_id[ep_idx]
+        idxs = ep_idx * ep_len + step_idx.astype(int)
+        active_batch = self.sample(finetune_bs, idxs)
+
+        # import matplotlib.pyplot as plt
+        # plt.scatter(uniform_batch['observations'][:, 0], uniform_batch['observations'][:, 1])
+        # plt.scatter(active_batch['observations'][:, 0], active_batch['observations'][:, 1])
+        # plt.scatter(obs[0], obs[1], color='red')
+        # plt.scatter(goal[0], goal[1], color='blue')
+        # plt.savefig('test.png')
+
+        return {k: np.concatenate([uniform_batch[k], active_batch[k]]) for k in uniform_batch}
+
     def augment(self, batch, keys):
         """Apply image augmentation to the given keys."""
         padding = 3
