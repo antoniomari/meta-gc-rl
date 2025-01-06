@@ -33,8 +33,8 @@ def main(cfg):
     exp_name = get_exp_name(cfg.seed)
     setup_wandb(project='OGBench', group=cfg.run_group, name=exp_name, config=cfg.to_dict())
 
-    os.makedirs(cfg.save_dir, exist_ok=True)
-    with open(os.path.join(cfg.save_dir, 'config.yaml'), 'w') as f:
+    os.makedirs(cfg.working_dir, exist_ok=True)
+    with open(os.path.join(cfg.working_dir, 'config.yaml'), 'w') as f:
         yaml.dump(cfg.to_dict(), f)
 
     # Set up environment and dataset.
@@ -71,8 +71,8 @@ def main(cfg):
         agent = restore_agent(agent, cfg.restore_path, cfg.restore_epoch)
 
     # Train agent.
-    train_logger = CsvLogger(os.path.join(cfg.save_dir, 'train.csv'))
-    eval_logger = CsvLogger(os.path.join(cfg.save_dir, 'eval.csv'))
+    train_logger = CsvLogger(os.path.join(cfg.working_dir, 'train.csv'))
+    eval_logger = CsvLogger(os.path.join(cfg.working_dir, 'eval.csv'))
     first_time = time.time()
     last_time = time.time()
     for i in tqdm.tqdm(range(1, cfg.train_steps + 1), smoothing=0.1, dynamic_ncols=True):
@@ -140,7 +140,7 @@ def main(cfg):
 
         # Save agent.
         if i % cfg.save_interval == 0:
-            save_agent(agent, cfg.save_dir, i)
+            save_agent(agent, cfg.working_dir, i)
 
     train_logger.close()
     eval_logger.close()
