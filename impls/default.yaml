@@ -1,0 +1,25 @@
+run_group: debug
+seed: 0
+env_name: pointmaze-medium-navigate-v0
+save_dir: exp
+restore_path: null
+restore_epoch: null
+
+agent:
+  agent_name: gcbc
+
+train_steps: 1000000
+log_interval: 5000
+eval_interval: 100000
+save_interval: 1000000
+
+eval_tasks: null
+eval_episodes: 50
+eval_temperature: 0
+eval_gaussian: null
+video_episodes: 0
+video_frame_skip: 3
+eval_on_cpu: 1
+
+finetune_steps: 10
+finetune_lr: 3.e-5
