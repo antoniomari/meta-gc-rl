@@ -66,7 +66,6 @@ def evaluate(
     Returns:
         A tuple containing the statistics, trajectories, and rendered videos.
     """
-    actor_fn = supply_rng(agent.sample_actions, rng=jax.random.PRNGKey(np.random.randint(0, 2**32)))
     trajs = []
     stats = defaultdict(list)
 
@@ -90,6 +89,7 @@ def evaluate(
             batch = train_dataset.active_sample(config['batch_size'], observation, goal)
             agent, info = agent.update(batch)
             add_to(finetune_stats, flatten(info))
+        actor_fn = supply_rng(agent.sample_actions, rng=jax.random.PRNGKey(np.random.randint(0, 2**32)))
 
         done = False
         step = 0
