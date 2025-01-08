@@ -284,9 +284,9 @@ class GCDataset:
         ep_len = np.where(self.dataset['terminals'])[0][0].item() + 2
         _obs = self.dataset['observations'].reshape(-1, ep_len, obs.shape[-1])
         assert self.dataset['terminals'].reshape(-1, ep_len)[:, :-2].sum() == 0
-        dist_to_start = ((_obs - obs)**2).sum(-1)
+        dist_to_start = ((_obs[..., :2] - obs[:2])**2).sum(-1)
         start_id = np.argmin(dist_to_start, -1)
-        dist_to_goal = ((_obs - goal)**2).sum(-1)
+        dist_to_goal = ((_obs[..., :2] - goal[:2])**2).sum(-1)
         goal_id = np.argmin(dist_to_goal, -1)
         bad_trajs = (dist_to_start.min(-1) + dist_to_goal.min(-1)) > 2*radius
         bad_trajs = np.logical_or(bad_trajs, (start_id > goal_id))
