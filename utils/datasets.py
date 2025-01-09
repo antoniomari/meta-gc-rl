@@ -277,7 +277,7 @@ class GCDataset:
 
         return goal_idxs
 
-    def active_sample(self, batch_size: int, obs, goal):
+    def active_sample(self, batch_size: int, obs, goal, fix_actor_goal):
         finetune_bs = int(batch_size * self.config.finetune_ratio)
         uniform_batch = self.sample(batch_size - finetune_bs)
         radius = 2.0
@@ -298,6 +298,10 @@ class GCDataset:
         step_idx = np.random.uniform(size=finetune_bs) * (goal_id[ep_idx] - start_id[ep_idx]) + start_id[ep_idx]
         idxs = ep_idx * ep_len + step_idx.astype(int)
         active_batch = self.sample(finetune_bs, idxs)
+
+        # fix actor goal to fine-tuning goal
+        idxs = np.random.uniform(size=(finetune_bs,)) < fix_actor_goal
+        active_batch['actor_goals'][idxs] = goal
 
         # import matplotlib.pyplot as plt
         # plt.scatter(uniform_batch['observations'][:, 0], uniform_batch['observations'][:, 1])

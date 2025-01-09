@@ -78,15 +78,20 @@ def evaluate(
         goal = info.get('goal')
         goal_frame = info.get('goal_rendered')
 
-        train_state = copy.deepcopy(agent.network)
+        old_config = agent.config
+        new_config = agent.config.unfreeze()
+        if config['finetune_bc']:
+            new_config['actor_loss'] = 'bc'
+        new_config = old_config.__class__(new_config)
+        old_train_state = copy.deepcopy(agent.network)
         opt_state = agent.network.opt_state
         finetune_tx = optax.adam(learning_rate=finetune_lr)
-        agent = agent.replace(network=agent.network.replace(tx=finetune_tx, opt_state=opt_state))
+        agent = agent.replace(network=agent.network.replace(tx=finetune_tx, opt_state=opt_state), config=new_config)
         finetune_stats = defaultdict(list)
         # for RL: maybe we also update Q, maybe just the policy
         # optionally, we can do this at every step
         for _ in range(num_finetune_steps):
-            batch = train_dataset.active_sample(config['batch_size'], observation, goal)
+            batch = train_dataset.active_sample(config['batch_size'], observation, goal, config['fix_actor_goal'])
             agent, info = agent.update(batch)
             add_to(finetune_stats, flatten(info))
         actor_fn = supply_rng(agent.sample_actions, rng=jax.random.PRNGKey(np.random.randint(0, 2**32)))
@@ -129,7 +134,7 @@ def evaluate(
         else:
             renders.append(np.array(render))
 
-        agent = agent.replace(network=train_state)
+        agent = agent.replace(network=old_train_state, config=old_config)
 
     stats.update({'finetune/' + k: v for k, v in finetune_stats.items()})
     for k, v in stats.items():

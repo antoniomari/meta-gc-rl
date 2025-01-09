@@ -119,6 +119,26 @@ class GCIQLAgent(flax.struct.PyTreeNode):
                 'mse': jnp.mean((dist.mode() - batch['actions']) ** 2),
                 'std': jnp.mean(dist.scale_diag),
             }
+        elif self.config['actor_loss'] == 'bc':
+            # BC loss.
+            dist = self.network.select('actor')(batch['observations'], batch['actor_goals'], params=grad_params)
+            log_prob = dist.log_prob(batch['actions'])
+
+            actor_loss = -log_prob.mean()
+
+            actor_info = {
+                'actor_loss': actor_loss,
+                'bc_log_prob': log_prob.mean(),
+            }
+            if not self.config['discrete']:
+                actor_info.update(
+                    {
+                        'mse': jnp.mean((dist.mode() - batch['actions']) ** 2),
+                        'std': jnp.mean(dist.scale_diag),
+                    }
+                )
+
+            return actor_loss, actor_info
         else:
             raise ValueError(f'Unsupported actor loss: {self.config["actor_loss"]}')
 
@@ -304,6 +324,9 @@ def get_config():
             gc_negative=True,  # Whether to use '0 if s == g else -1' (True) or '1 if s == g else 0' (False) as reward.
             p_aug=0.0,  # Probability of applying image augmentation.
             frame_stack=ml_collections.config_dict.placeholder(int),  # Number of frames to stack.
+            finetune_ratio=0.5,  # Ratio of fine-tuning data actively sampled.
+            finetune_bc=False,  # Forces pure BC during fine-tuning.
+            fix_actor_goal=0.0,  # Ratio of fine-tuning goals set to the real one.
         )
     )
     return config

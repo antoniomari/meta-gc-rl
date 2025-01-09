@@ -166,6 +166,8 @@ def get_config():
             p_aug=0.0,  # Probability of applying image augmentation.
             frame_stack=ml_collections.config_dict.placeholder(int),  # Number of frames to stack.
             finetune_ratio=0.5,  # Ratio of fine-tuning data actively sampled.
+            finetune_bc=False,  # Forces pure BC during fine-tuning.
+            fix_actor_goal=0.0,  # Ratio of fine-tuning goals set to the real one.
         )
     )
     return config
