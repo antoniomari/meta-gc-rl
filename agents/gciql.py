@@ -327,6 +327,7 @@ def get_config():
             finetune_ratio=0.5,  # Ratio of fine-tuning data actively sampled.
             finetune_bc=False,  # Forces pure BC during fine-tuning.
             fix_actor_goal=0.0,  # Ratio of fine-tuning goals set to the real one.
+            finetune_batch_size=1024,  # Batch size for finetuning.
         )
     )
     return config
