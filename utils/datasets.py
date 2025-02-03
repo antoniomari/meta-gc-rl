@@ -295,10 +295,14 @@ class GCDataset:
 
         return {k: np.concatenate([uniform_batch[k], active_batch[k]]) for k in uniform_batch}
 
-    def prepare_active_sample(self, agent, obs, goal, finetune_kwargs):
+    def prepare_active_sample(self, agent, obs, goal, finetune_kwargs, batch_size=2048):
 
         _obs = self.dataset['observations']
-        _values = agent.network.select('value')(_obs, goal.reshape(1, -1).repeat(len(_obs), 0))
+        _values = []
+        for i in range((len(_obs) // batch_size) + 1):
+            _sli, _ce = i*batch_size, min((i+1)*batch_size, len(_obs))
+            _values.append(agent.network.select('value')(_obs[_sli:_ce], goal.reshape(1, -1).repeat(_ce - _sli, 0)))
+        _values = jnp.concatenate(_values, 0)
         _state_to_goal = (jnp.log((_values / (1/(1 - 0.99)) + 1)) / jnp.log(0.99))
 
         horizon = finetune_kwargs['horizon']
@@ -341,7 +345,11 @@ class GCDataset:
         # 2) Filter these trajectories to be relevant for the current state
         # - state respects triangle inequality
         if finetune_kwargs['filter_by_equality']:
-            _start_values = agent.network.select('value')(obs.reshape(1, -1).repeat(len(_obs), 0), _obs[:, :2])
+            _start_values = []
+            for i in range((len(_obs) // batch_size) + 1):
+                _sli, _ce = i*batch_size, min((i+1)*batch_size, len(_obs))
+                _start_values.append(agent.network.select('value')(obs.reshape(1, -1).repeat(_ce - _sli, 0), _obs[_sli:_ce, :2]))
+            _start_values = jnp.concatenate(_start_values, 0)
             _start_to_state = (jnp.log((_start_values / (1/(1 - 0.99)) + 1)) / jnp.log(0.99))
             eq_score = _start_to_state + _state_to_goal  # picking bottom 50% of this score is insufficient
             eq_filter = eq_score < jnp.quantile(eq_score, eq_quantile)
