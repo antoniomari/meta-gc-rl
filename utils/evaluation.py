@@ -41,6 +41,7 @@ def evaluate(
     env,
     task_id=None,
     config=None,
+    finetune_config=None,
     num_eval_episodes=50,
     num_video_episodes=0,
     num_finetune_steps=0,
@@ -57,6 +58,7 @@ def evaluate(
         env: Environment.
         task_id: Task ID to be passed to the environment.
         config: Configuration dictionary.
+        finetune_config: Configuration dictionary specific to finetuning.
         num_eval_episodes: Number of episodes to evaluate the agent.
         num_video_episodes: Number of episodes to render. These episodes are not included in the statistics.
         video_frame_skip: Number of frames to skip between renders.
@@ -90,8 +92,9 @@ def evaluate(
         finetune_stats = defaultdict(list)
         # for RL: maybe we also update Q, maybe just the policy
         # optionally, we can do this at every step
+        _filter = train_dataset.prepare_active_sample(agent, observation, goal, finetune_config)
         for _ in range(num_finetune_steps):
-            batch = train_dataset.active_sample(config['batch_size'], observation, goal, config['fix_actor_goal'])
+            batch = train_dataset.active_sample(config['batch_size'], _filter, goal, config['fix_actor_goal'])
             agent, info = agent.update(batch)
             add_to(finetune_stats, flatten(info))
         actor_fn = supply_rng(agent.sample_actions, rng=jax.random.PRNGKey(np.random.randint(0, 2**32)))

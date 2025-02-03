@@ -277,26 +277,10 @@ class GCDataset:
 
         return goal_idxs
 
-    def active_sample(self, batch_size: int, obs, goal, fix_actor_goal):
+    def active_sample(self, batch_size: int, _filter, goal, fix_actor_goal):
         finetune_bs = int(batch_size * self.config.finetune_ratio)
         uniform_batch = self.sample(batch_size - finetune_bs)
-        radius = 2.0
-        ep_len = np.where(self.dataset['terminals'])[0][0].item() + 2
-        _obs = self.dataset['observations'].reshape(-1, ep_len, obs.shape[-1])
-        assert self.dataset['terminals'].reshape(-1, ep_len)[:, :-2].sum() == 0
-        dist_to_start = ((_obs[..., :2] - obs[:2])**2).sum(-1)
-        start_id = np.argmin(dist_to_start, -1)
-        dist_to_goal = ((_obs[..., :2] - goal[:2])**2).sum(-1)
-        goal_id = np.argmin(dist_to_goal, -1)
-        bad_trajs = (dist_to_start.min(-1) + dist_to_goal.min(-1)) > 2*radius
-        bad_trajs = np.logical_or(bad_trajs, (start_id > goal_id))
-        # lower score is better
-        score = goal_id - start_id
-        score[bad_trajs] += 2*ep_len
-        best = np.argsort(score)[:10]
-        ep_idx = np.random.choice(best, finetune_bs)
-        step_idx = np.random.uniform(size=finetune_bs) * (goal_id[ep_idx] - start_id[ep_idx]) + start_id[ep_idx]
-        idxs = ep_idx * ep_len + step_idx.astype(int)
+        idxs = np.random.choice(np.where(_filter)[0], finetune_bs)
         active_batch = self.sample(finetune_bs, idxs)
 
         # fix actor goal to fine-tuning goal
@@ -306,11 +290,104 @@ class GCDataset:
         # import matplotlib.pyplot as plt
         # plt.scatter(uniform_batch['observations'][:, 0], uniform_batch['observations'][:, 1])
         # plt.scatter(active_batch['observations'][:, 0], active_batch['observations'][:, 1])
-        # plt.scatter(obs[0], obs[1], color='red')
         # plt.scatter(goal[0], goal[1], color='blue')
         # plt.savefig('test.png')
 
         return {k: np.concatenate([uniform_batch[k], active_batch[k]]) for k in uniform_batch}
+
+    def prepare_active_sample(self, agent, obs, goal, finetune_kwargs):
+
+        _obs = self.dataset['observations']
+        _values = agent.network.select('value')(_obs, goal.reshape(1, -1).repeat(len(_obs), 0))
+        _state_to_goal = (jnp.log((_values / (1/(1 - 0.99)) + 1)) / jnp.log(0.99))
+
+        horizon = finetune_kwargs['horizon']
+        eq_quantile = finetune_kwargs['eq_quantile']
+        mc_quantile = finetune_kwargs['mc_quantile']
+        # heuristic works well if stitching is not needed.
+        # MC + start is similar to heuristic (aside from issue when goals appear before start)
+        # TD + equality is a replacement when stitching is needed (relies on a value function)
+
+        ep_id = self.dataset['terminals'].cumsum() // 2
+        ep_id[1:] = ep_id[:-1]
+        n_ep = ep_id.max().astype(int)
+        _filter = jnp.ones_like(ep_id)
+
+        # 1) Filter-out non-optimal trajectories/subtrajectories (one parameter determining traj len)
+        # What are the properties of trajectories sampled from the optimal policy?
+        # - trajectories with low Monte-Carlo returns (current)
+        if finetune_kwargs['filter_by_mc']:
+            mc_filter = jnp.zeros_like(ep_id)
+            returns = jnp.zeros(n_ep)
+            rewards = jnp.sqrt(((_obs[..., :2] - goal[:2])**2).sum(-1)) < 1
+            for id in range(n_ep):
+                _slice = (ep_id == id)
+                discounts = (0.99 ** jnp.arange(_slice.sum()))
+                returns = returns.at[id].set((discounts * rewards[_slice]).sum())
+            min_return = jnp.quantile(returns, mc_quantile)
+            for id in range(n_ep):
+                if returns[id] > min_return:
+                    _slice = (ep_id == id)
+                    mc_filter = mc_filter.at[_slice].set(1.)
+            _filter = _filter * mc_filter
+
+        # - (sub)trajectories with low TD-error mean_t (V(s_t+1) - \gammaV(s_t))^2
+        if finetune_kwargs['filter_by_td']:
+            td_filter = jnp.zeros_like(ep_id)
+            same_ep = (ep_id[:-horizon] == ep_id[horizon:])
+            td_filter = td_filter.at[:-horizon].set(((_values[:-horizon] - _values[horizon:]) > 0) * same_ep)
+            _filter = _filter * td_filter
+
+        # 2) Filter these trajectories to be relevant for the current state
+        # - state respects triangle inequality
+        if finetune_kwargs['filter_by_equality']:
+            _start_values = agent.network.select('value')(obs.reshape(1, -1).repeat(len(_obs), 0), _obs[:, :2])
+            _start_to_state = (jnp.log((_start_values / (1/(1 - 0.99)) + 1)) / jnp.log(0.99))
+            eq_score = _start_to_state + _state_to_goal  # picking bottom 50% of this score is insufficient
+            eq_filter = eq_score < jnp.quantile(eq_score, eq_quantile)
+            _filter = _filter * eq_filter
+
+        # - trajectory passes close to current state (in terms of reward)
+        if finetune_kwargs['filter_by_start']:
+            start_filter = jnp.zeros_like(ep_id)
+            matches = jnp.sqrt(((_obs[..., :2] - obs[:2])**2).sum(-1)) < 1
+            for id in range(n_ep):
+                # TODO: if couple with MC, this includes trajectories that visit the goal *before* the start
+                _slice = (ep_id == id)
+                if matches[_slice].any():
+                    # only select rest of trajectory!
+                    idxs = _slice * ((_slice * matches).cumsum() > 0)
+                    start_filter = start_filter.at[idxs].set(1.)
+            _filter = _filter * start_filter
+
+        # old filtering heuristic
+        if finetune_kwargs['filter_by_heuristic']:
+            radius = 2.0
+            # reshaping to (N x H x S)
+            ep_len = np.where(self.dataset['terminals'])[0][0].item() + 2
+            _obs = self.dataset['observations'].reshape(-1, ep_len, obs.shape[-1])
+            assert self.dataset['terminals'].reshape(-1, ep_len)[:, :-2].sum() == 0
+            dist_to_start = ((_obs[..., :2] - obs[:2])**2).sum(-1)
+            # ensuring start and goal appear in the right order
+            start_id = np.argmin(dist_to_start, -1)
+            dist_to_goal = ((_obs[..., :2] - goal[:2])**2).sum(-1)
+            goal_id = np.argmin(dist_to_goal, -1)
+            bad_trajs = (dist_to_start.min(-1) + dist_to_goal.min(-1)) > 2*radius
+            bad_trajs = np.logical_or(bad_trajs, (start_id > goal_id))
+            # lower score is better
+            score = goal_id - start_id
+            score[bad_trajs] += 2*ep_len
+            ep_idxs = np.argsort(score)[:10]
+            heuristic_filter = jnp.zeros_like(ep_id)
+            for ep_idx in ep_idxs:
+                heuristic_filter = heuristic_filter.at[ep_idx*ep_len+start_id[ep_idx]:ep_idx*ep_len+goal_id[ep_idx]+1].set(1.)
+            _filter = _filter * heuristic_filter
+
+            # if filter is all zeros, sample uniformly
+            if not any(_filter):
+                _filter = jnp.ones_like(ep_id)
+
+        return _filter
 
     def augment(self, batch, keys):
         """Apply image augmentation to the given keys."""

@@ -111,6 +111,7 @@ def main(cfg):
                     env=env,
                     task_id=task_id,
                     config=config,
+                    finetune_config=cfg['finetune'],
                     num_eval_episodes=cfg.eval_episodes,
                     num_video_episodes=cfg.video_episodes,
                     num_finetune_steps=cfg.finetune_steps,
