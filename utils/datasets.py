@@ -287,12 +287,6 @@ class GCDataset:
         idxs = np.random.uniform(size=(finetune_bs,)) < fix_actor_goal
         active_batch['actor_goals'][idxs] = goal
 
-        # import matplotlib.pyplot as plt
-        # plt.scatter(uniform_batch['observations'][:, 0], uniform_batch['observations'][:, 1])
-        # plt.scatter(active_batch['observations'][:, 0], active_batch['observations'][:, 1])
-        # plt.scatter(goal[0], goal[1], color='blue')
-        # plt.savefig('test.png')
-
         return {k: np.concatenate([uniform_batch[k], active_batch[k]]) for k in uniform_batch}
 
     def prepare_active_sample(self, agent, obs, goal, finetune_kwargs, batch_size=2048):
@@ -314,37 +308,52 @@ class GCDataset:
 
         ep_id = self.dataset['terminals'].cumsum() // 2
         ep_id[1:] = ep_id[:-1]
-        n_ep = ep_id.max().astype(int)
         _filter = jnp.ones_like(ep_id)
 
-        # 1) Filter-out non-optimal trajectories/subtrajectories (one parameter determining traj len)
-        # What are the properties of trajectories sampled from the optimal policy?
-        # - trajectories with low Monte-Carlo returns (current)
+        # On-policy filtering: only find "optimal trajectories", no stitching
+        # - trajectories with high Monte-Carlo returns
+        # - trajectory passes close to current state (in terms of reward)
         if finetune_kwargs['filter_by_mc']:
+
             mc_filter = jnp.zeros_like(ep_id)
-            returns = jnp.zeros(n_ep)
-            rewards = jnp.sqrt(((_obs[..., :2] - goal[:2])**2).sum(-1)) < 1
-            for id in range(n_ep):
-                _slice = (ep_id == id)
-                discounts = (0.99 ** jnp.arange(_slice.sum()))
-                returns = returns.at[id].set((discounts * rewards[_slice]).sum())
-            min_return = jnp.quantile(returns, mc_quantile)
-            for id in range(n_ep):
-                if returns[id] > min_return:
-                    _slice = (ep_id == id)
-                    mc_filter = mc_filter.at[_slice].set(1.)
+            # in theory we would need to consider all subtrajectories
+            # in practice, we can limit to those starting at the current state
+            # and ending at the goal
+            start_matches = jnp.sqrt(((_obs[..., :2] - obs[:2])**2).sum(-1)) < 1
+            goal_matches = jnp.sqrt(((_obs[..., :2] - goal[:2])**2).sum(-1)) < 1
+            start_matches = jnp.where(start_matches)[0]
+            goal_matches = jnp.where(goal_matches)[0]
+
+            i, j = 0, 0
+            candidates = []
+            # sliding window to compute all possible subtrajectory
+            while i < len(start_matches) and j < len(goal_matches):
+                if start_matches[i] >= goal_matches[j]:
+                    j += 1
+                else:
+                    if ep_id[start_matches[i]] == ep_id[goal_matches[j]]:
+                        candidates.append((start_matches[i], goal_matches[j]))
+                    i += 1
+
+            # find the shortest subtrajectories (maximizing MC returns)
+            max_steps = jnp.quantile(jnp.array([c[1] - c[0] for c in candidates]), 1 - mc_quantile)
+            for c in candidates:
+                if c[1] - c[0] < max_steps:
+                    mc_filter = mc_filter.at[c[0]:c[1]].set(1.)
             _filter = _filter * mc_filter
 
+        # Off-policy filtering (needs a value function, can stitch)
         # - (sub)trajectories with low TD-error mean_t (V(s_t+1) - \gammaV(s_t))^2
+        # - state respects triangle inequality
         if finetune_kwargs['filter_by_td']:
             td_filter = jnp.zeros_like(ep_id)
             same_ep = (ep_id[:-horizon] == ep_id[horizon:])
-            td_filter = td_filter.at[:-horizon].set(((_values[:-horizon] - _values[horizon:]) > 0) * same_ep)
+            td = ((0.99**horizon) * _values[horizon:] - _values[:-horizon]) * same_ep
+            min_td = jnp.quantile(td, mc_quantile)
+            for h in range(horizon):
+                td_filter = td_filter.at[h:-horizon+h].set(jnp.logical_or((td > min_td) * same_ep, td_filter[h:-horizon+h]))
             _filter = _filter * td_filter
 
-        # 2) Filter these trajectories to be relevant for the current state
-        # - state respects triangle inequality
-        if finetune_kwargs['filter_by_equality']:
             _start_values = []
             for i in range((len(_obs) // batch_size) + 1):
                 _sli, _ce = i*batch_size, min((i+1)*batch_size, len(_obs))
@@ -354,19 +363,6 @@ class GCDataset:
             eq_score = _start_to_state + _state_to_goal  # picking bottom 50% of this score is insufficient
             eq_filter = eq_score < jnp.quantile(eq_score, eq_quantile)
             _filter = _filter * eq_filter
-
-        # - trajectory passes close to current state (in terms of reward)
-        if finetune_kwargs['filter_by_start']:
-            start_filter = jnp.zeros_like(ep_id)
-            matches = jnp.sqrt(((_obs[..., :2] - obs[:2])**2).sum(-1)) < 1
-            for id in range(n_ep):
-                # TODO: if couple with MC, this includes trajectories that visit the goal *before* the start
-                _slice = (ep_id == id)
-                if matches[_slice].any():
-                    # only select rest of trajectory!
-                    idxs = _slice * ((_slice * matches).cumsum() > 0)
-                    start_filter = start_filter.at[idxs].set(1.)
-            _filter = _filter * start_filter
 
         # old filtering heuristic
         if finetune_kwargs['filter_by_heuristic']:
