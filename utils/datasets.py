@@ -277,8 +277,8 @@ class GCDataset:
 
         return goal_idxs
 
-    def active_sample(self, batch_size: int, _filter, goal, fix_actor_goal):
-        finetune_bs = int(batch_size * self.config.finetune_ratio)
+    def active_sample(self, batch_size: int, _filter, goal, ratio, fix_actor_goal):
+        finetune_bs = int(batch_size * ratio)
         uniform_batch = self.sample(batch_size - finetune_bs)
         idxs = np.random.choice(np.where(_filter)[0], finetune_bs)
         active_batch = self.sample(finetune_bs, idxs)
@@ -292,12 +292,6 @@ class GCDataset:
     def prepare_active_sample(self, agent, obs, goal, finetune_kwargs, batch_size=2048):
 
         _obs = self.dataset['observations']
-        _values = []
-        for i in range((len(_obs) // batch_size) + 1):
-            _sli, _ce = i*batch_size, min((i+1)*batch_size, len(_obs))
-            _values.append(agent.network.select('value')(_obs[_sli:_ce], goal.reshape(1, -1).repeat(_ce - _sli, 0)))
-        _values = jnp.concatenate(_values, 0)
-        _state_to_goal = (jnp.log((_values / (1/(1 - 0.99)) + 1)) / jnp.log(0.99))
 
         horizon = finetune_kwargs['horizon']
         eq_quantile = finetune_kwargs['eq_quantile']
@@ -336,7 +330,8 @@ class GCDataset:
                     i += 1
 
             # find the shortest subtrajectories (maximizing MC returns)
-            max_steps = jnp.quantile(jnp.array([c[1] - c[0] for c in candidates]), 1 - mc_quantile)
+            if candidates:
+                max_steps = jnp.quantile(jnp.array([c[1] - c[0] for c in candidates]), 1 - mc_quantile)
             for c in candidates:
                 if c[1] - c[0] < max_steps:
                     mc_filter = mc_filter.at[c[0]:c[1]].set(1.)
@@ -346,6 +341,14 @@ class GCDataset:
         # - (sub)trajectories with low TD-error mean_t (V(s_t+1) - \gammaV(s_t))^2
         # - state respects triangle inequality
         if finetune_kwargs['filter_by_td']:
+
+            _values = []
+            for i in range((len(_obs) // batch_size) + 1):
+                _sli, _ce = i*batch_size, min((i+1)*batch_size, len(_obs))
+                _values.append(agent.network.select('value')(_obs[_sli:_ce], goal.reshape(1, -1).repeat(_ce - _sli, 0)))
+            _values = jnp.concatenate(_values, 0)
+            _state_to_goal = (jnp.log((_values / (1/(1 - 0.99)) + 1)) / jnp.log(0.99))
+
             td_filter = jnp.zeros_like(ep_id)
             same_ep = (ep_id[:-horizon] == ep_id[horizon:])
             td = ((0.99**horizon) * _values[horizon:] - _values[:-horizon]) * same_ep
@@ -387,9 +390,9 @@ class GCDataset:
                 heuristic_filter = heuristic_filter.at[ep_idx*ep_len+start_id[ep_idx]:ep_idx*ep_len+goal_id[ep_idx]+1].set(1.)
             _filter = _filter * heuristic_filter
 
-            # if filter is all zeros, sample uniformly
-            if not any(_filter):
-                _filter = jnp.ones_like(ep_id)
+        # if filter is all zeros, sample uniformly
+        if not any(_filter):
+            _filter = jnp.ones_like(ep_id)
 
         return _filter
 

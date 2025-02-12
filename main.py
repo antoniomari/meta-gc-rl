@@ -1,6 +1,5 @@
 import sys
 import yaml
-import json
 import os
 import random
 import time
@@ -111,11 +110,9 @@ def main(cfg):
                     env=env,
                     task_id=task_id,
                     config=config,
-                    finetune_config=cfg['finetune'],
+                    finetune_config=cfg.finetune,
                     num_eval_episodes=cfg.eval_episodes,
                     num_video_episodes=cfg.video_episodes,
-                    num_finetune_steps=cfg.finetune_steps,
-                    finetune_lr=cfg.finetune_lr,
                     train_dataset=train_dataset,
                     video_frame_skip=cfg.video_frame_skip,
                     eval_temperature=cfg.eval_temperature,

@@ -6,16 +6,20 @@ restore_path: null
 restore_epoch: null
 
 agent:
-  agent_name: gcbc
+  agent_name: gciql
 
 finetune:
+  ratio: 0.5
+  num_steps: 10
+  lr: 3.e-5
+  actor_loss: null
+  batch_size: 1024
+  fix_actor_goal: 0.0
   horizon: 1
   eq_quantile: 0.6
   mc_quantile: 0.9
   filter_by_mc: false
   filter_by_td: false
-  filter_by_equality: false
-  filter_by_start: false
   filter_by_heuristic: true
 
 train_steps: 1000000
@@ -30,6 +34,3 @@ eval_gaussian: null
 video_episodes: 0
 video_frame_skip: 3
 eval_on_cpu: 1
-
-finetune_steps: 10
-finetune_lr: 3.e-5
