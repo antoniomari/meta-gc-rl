@@ -360,7 +360,7 @@ class GCDataset:
             _start_values = []
             for i in range((len(_obs) // batch_size) + 1):
                 _sli, _ce = i*batch_size, min((i+1)*batch_size, len(_obs))
-                _start_values.append(agent.network.select('value')(obs.reshape(1, -1).repeat(_ce - _sli, 0), _obs[_sli:_ce, :2]))
+                _start_values.append(agent.network.select('value')(obs.reshape(1, -1).repeat(_ce - _sli, 0), _obs[_sli:_ce]))
             _start_values = jnp.concatenate(_start_values, 0)
             _start_to_state = (jnp.log((_start_values / (1/(1 - 0.99)) + 1)) / jnp.log(0.99))
             eq_score = _start_to_state + _state_to_goal  # picking bottom 50% of this score is insufficient
