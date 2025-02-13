@@ -1,6 +1,7 @@
 run_group: debug
 seed: 0
 env_name: pointmaze-medium-navigate-v0
+data_ratio: 1.0
 working_dir: exp
 restore_path: null
 restore_epoch: null

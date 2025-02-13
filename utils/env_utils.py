@@ -92,7 +92,7 @@ def setup_egl():
             os.environ['EGL_DEVICE_ID'] = os.environ['SLURM_STEP_GPUS']
 
 
-def make_env_and_datasets(dataset_name, frame_stack=None):
+def make_env_and_datasets(dataset_name, data_ratio=1.0, frame_stack=None):
     """Make OGBench environment and datasets.
 
     Args:
@@ -106,6 +106,11 @@ def make_env_and_datasets(dataset_name, frame_stack=None):
 
     # Use compact dataset to save memory.
     env, train_dataset, val_dataset = ogbench.make_env_and_datasets(dataset_name, compact_dataset=True)
+    if data_ratio < 1.0:
+        ep_id = np.zeros_like(train_dataset['terminals'])
+        ep_id[1:] = (train_dataset['terminals'].cumsum() // 2)[:-1]
+        filter = ep_id < int(data_ratio * (ep_id.max() + 1))
+        train_dataset = {k: v[filter] for k, v in train_dataset.items()}
     train_dataset = Dataset.create(**train_dataset)
     val_dataset = Dataset.create(**val_dataset)
 

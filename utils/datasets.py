@@ -390,10 +390,6 @@ class GCDataset:
                 heuristic_filter = heuristic_filter.at[ep_idx*ep_len+start_id[ep_idx]:ep_idx*ep_len+goal_id[ep_idx]+1].set(1.)
             _filter = _filter * heuristic_filter
 
-        # if filter is all zeros, sample uniformly
-        if not any(_filter):
-            _filter = jnp.ones_like(ep_id)
-
         return _filter
 
     def augment(self, batch, keys):

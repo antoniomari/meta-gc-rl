@@ -38,7 +38,7 @@ def main(cfg):
 
     # Set up environment and dataset.
     config = cfg.agent
-    env, train_dataset, val_dataset = make_env_and_datasets(cfg.env_name, frame_stack=config['frame_stack'])
+    env, train_dataset, val_dataset = make_env_and_datasets(cfg.env_name, cfg.data_ratio, frame_stack=config['frame_stack'])
 
     dataset_class = {
         'GCDataset': GCDataset,

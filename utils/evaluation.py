@@ -91,7 +91,8 @@ def evaluate(
         finetune_stats = defaultdict(list)
         if finetune_config.num_steps:
             _filter = train_dataset.prepare_active_sample(agent, observation, goal, finetune_config)
-            for _ in range(finetune_config.num_steps):
+            num_steps = finetune_config.num_steps if _filter.sum() else 0
+            for _ in range(num_steps):
                 batch = train_dataset.active_sample(finetune_config.batch_size, _filter, goal, finetune_config.ratio, finetune_config.fix_actor_goal)
                 agent, info = agent.update(batch)
                 add_to(finetune_stats, flatten(info))
