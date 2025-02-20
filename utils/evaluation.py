@@ -82,6 +82,8 @@ def evaluate(
         new_config = agent.config.unfreeze()
         if finetune_config.actor_loss is not None:
             new_config['actor_loss'] = finetune_config.actor_loss
+        if finetune_config.alpha is not None:
+            new_config['alpha'] = finetune_config.alpha
         new_config = old_config.__class__(new_config)
         old_train_state = copy.deepcopy(agent.network)
         opt_state = agent.network.opt_state
