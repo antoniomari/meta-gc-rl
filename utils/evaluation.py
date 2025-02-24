@@ -90,6 +90,23 @@ def evaluate(
         finetune_tx = optax.adam(learning_rate=finetune_config.lr)
         agent = agent.replace(network=agent.network.replace(tx=finetune_tx, opt_state=opt_state), config=new_config)
 
+        # _batch = train_dataset.sample(10000)
+        # def make_plots(suffix):
+        #     import matplotlib.pyplot as plt
+        #     _obs = _batch['observations']
+        #     values = agent.network.select('value')(_obs, goal.reshape(1, -1).repeat(10000, 0))
+        #     print(values[:3])
+        #     actions = agent.network.select('actor')(_obs, goal.reshape(1, -1).repeat(10000, 0)).mean()
+        #     print(actions[:3])
+        #     print(values[8350] - values[8300])
+        #     plt.scatter(_obs[:, 0], _obs[:, 1], c=values)
+        #     plt.savefig(f'zvalues_{suffix}.png')
+        #     plt.close()
+        #     plt.quiver(_obs[:, 0], _obs[:, 1], actions[:, 0], actions[:, 1], angles='xy', scale_units='xy', scale=2)
+        #     plt.savefig(f'zactions_{suffix}.png', dpi=900)
+        #     plt.close()
+        # make_plots('pre')
+
         finetune_stats = defaultdict(list)
         if finetune_config.num_steps:
             _filter = train_dataset.prepare_active_sample(agent, observation, goal, finetune_config)
@@ -98,6 +115,8 @@ def evaluate(
                 batch = train_dataset.active_sample(finetune_config.batch_size, _filter, goal, finetune_config.ratio, finetune_config.fix_actor_goal)
                 agent, info = agent.update(batch)
                 add_to(finetune_stats, flatten(info))
+
+        # make_plots('post')
         actor_fn = supply_rng(agent.sample_actions, rng=jax.random.PRNGKey(np.random.randint(0, 2**32)))
 
         done = False

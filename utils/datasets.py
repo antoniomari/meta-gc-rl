@@ -6,6 +6,28 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from flax.core.frozen_dict import FrozenDict
+import rustworkx as rx
+from heapq import heappop, heappush
+
+
+def maximum_edge_length(G, source, target):
+    dist = {}  # maximum distances
+    seen = {source: 0}
+    fringe = [(0, source)]
+    while fringe:
+        (d, v) = heappop(fringe)
+        if v in dist:
+            continue  # already searched this node.
+        dist[v] = d
+        for u, cost in G.adj(v).items():
+            vu_dist = max(dist[v], cost)
+            if u in dist:
+                if vu_dist < dist[u]:
+                    raise ValueError("Contradictory paths found:", "negative weights?")
+            elif u not in seen or vu_dist < seen[u]:
+                seen[u] = vu_dist
+                heappush(fringe, (vu_dist, u))
+    return dist[target]
 
 
 def get_size(data):
@@ -31,6 +53,40 @@ def random_crop(img, crop_from, padding):
 def batched_random_crop(imgs, crop_froms, padding):
     """Batched version of random_crop."""
     return jax.vmap(random_crop, (0, 0, None))(imgs, crop_froms, padding)
+
+
+def filter_from_state_goal(dataset, obs, goal, quantile, slack):
+
+    _obs = dataset['observations']
+    ep_id = dataset['terminals'].cumsum() // 2
+    ep_id[1:] = ep_id[:-1]
+    ep_lens = np.unique(ep_id, return_counts= True)[1]
+    assert len(set(ep_lens)) == 1, "All episodes need to have the same length."
+    ep_len = ep_lens[0].item()
+
+    mask = np.zeros_like(ep_id)
+    _obs = _obs.reshape(-1, ep_len, _obs.shape[-1])
+    start_matches = jnp.sqrt(((_obs[...] - obs)**2).sum(-1)) < 0.5
+    goal_matches = jnp.sqrt(((_obs[...] - goal)**2).sum(-1)) < 0.5
+    filtered_eps = (start_matches.sum(-1) * goal_matches.sum(-1)) > 0
+    if filtered_eps.sum():
+        goal_matches_id = np.arange(ep_len).reshape(1, -1) * goal_matches
+        goal_matches_id = np.where(goal_matches_id == 0, ep_len, goal_matches_id)
+        acc_min = np.minimum.accumulate(goal_matches_id[..., ::-1], -1)[..., ::-1]
+        steps_to_goal = acc_min - np.arange(ep_len).reshape(1, -1)
+        candidates = steps_to_goal * start_matches
+        candidates = np.where(candidates == 0, ep_len, candidates)
+        candidates = np.where(acc_min == ep_len, ep_len, candidates)
+        solutions = np.argmin(candidates, -1)
+        goal_offset = np.min(candidates, -1)
+        threshold = np.quantile(goal_offset[goal_offset < ep_len], quantile)
+        threshold = min(threshold, ep_len - 1)  # in case no solutions are found
+        goal_offset = np.where(goal_offset > threshold, 0, goal_offset)
+        goal_offset = np.where(goal_offset > 0, np.minimum(goal_offset + slack, ep_len - solutions), 0)
+        col_indices = np.arange(ep_len)
+        mask = (col_indices >= solutions[:, np.newaxis]) & (col_indices < (solutions + goal_offset)[:, np.newaxis])        
+
+    return mask.flatten()
 
 
 class Dataset(FrozenDict):
@@ -283,6 +339,10 @@ class GCDataset:
         idxs = np.random.choice(np.where(_filter)[0], finetune_bs)
         active_batch = self.sample(finetune_bs, idxs)
 
+        # active_batch['value_goals'] = active_batch['value_goals'] * 0 + goal
+        # successes = (jnp.sqrt(((active_batch['observations'] - active_batch['value_goals'])**2).sum(-1)) < 1).astype(float)
+        # active_batch['masks'] = 1.0 - successes
+        # active_batch['rewards'] = successes - (1.0 if self.config['gc_negative'] else 0.0)
         # fix actor goal to fine-tuning goal
         idxs = np.random.uniform(size=(finetune_bs,)) < fix_actor_goal
         active_batch['actor_goals'][idxs] = goal
@@ -292,49 +352,15 @@ class GCDataset:
     def prepare_active_sample(self, agent, obs, goal, finetune_kwargs, batch_size=2048):
 
         _obs = self.dataset['observations']
-
-        horizon = finetune_kwargs['horizon']
-        eq_quantile = finetune_kwargs['eq_quantile']
+        _filter = jnp.ones_like(self.dataset['terminals'])
         mc_quantile = finetune_kwargs['mc_quantile']
-        # heuristic works well if stitching is not needed.
-        # MC + start is similar to heuristic (aside from issue when goals appear before start)
-        # TD + equality is a replacement when stitching is needed (relies on a value function)
-
-        ep_id = self.dataset['terminals'].cumsum() // 2
-        ep_id[1:] = ep_id[:-1]
-        _filter = jnp.ones_like(ep_id)
+        mc_slack = finetune_kwargs['mc_slack']
 
         # On-policy filtering: only find "optimal trajectories", no stitching
         # - trajectories with high Monte-Carlo returns
         # - trajectory passes close to current state (in terms of reward)
         if finetune_kwargs['filter_by_mc']:
-
-            mc_filter = jnp.zeros_like(ep_id)
-            # in theory we would need to consider all subtrajectories
-            # in practice, we can limit to those starting at the current state
-            # and ending at the goal
-            start_matches = jnp.sqrt(((_obs[..., :2] - obs[:2])**2).sum(-1)) < 1
-            goal_matches = jnp.sqrt(((_obs[..., :2] - goal[:2])**2).sum(-1)) < 1
-            start_matches = jnp.where(start_matches)[0]
-            goal_matches = jnp.where(goal_matches)[0]
-
-            i, j = 0, 0
-            candidates = []
-            # sliding window to compute all possible subtrajectory
-            while i < len(start_matches) and j < len(goal_matches):
-                if start_matches[i] >= goal_matches[j]:
-                    j += 1
-                else:
-                    if ep_id[start_matches[i]] == ep_id[goal_matches[j]]:
-                        candidates.append((start_matches[i], goal_matches[j]))
-                    i += 1
-
-            # find the shortest subtrajectories (maximizing MC returns)
-            if candidates:
-                max_steps = jnp.quantile(jnp.array([c[1] - c[0] for c in candidates]), 1 - mc_quantile)
-            for c in candidates:
-                if c[1] - c[0] < max_steps:
-                    mc_filter = mc_filter.at[c[0]:c[1]].set(1.)
+            mc_filter = filter_from_state_goal(self.dataset, obs, goal, mc_quantile, mc_slack)
             _filter = _filter * mc_filter
 
         # Off-policy filtering (needs a value function, can stitch)
@@ -342,53 +368,111 @@ class GCDataset:
         # - state respects triangle inequality
         if finetune_kwargs['filter_by_td']:
 
-            _values = []
-            for i in range((len(_obs) // batch_size) + 1):
-                _sli, _ce = i*batch_size, min((i+1)*batch_size, len(_obs))
-                _values.append(agent.network.select('value')(_obs[_sli:_ce], goal.reshape(1, -1).repeat(_ce - _sli, 0)))
-            _values = jnp.concatenate(_values, 0)
-            _state_to_goal = (jnp.log((_values / (1/(1 - 0.99)) + 1)) / jnp.log(0.99))
+            batch_size = 1000
+            get_steps_between = lambda x, y: jnp.log((agent.network.select('value')(x, y) / (1/(1 - 0.99)) + 1)) / jnp.log(0.99)
+            batch = _obs[np.random.choice(len(_obs), batch_size)]
+            batch = np.concatenate([obs.reshape(1, -1), goal.reshape(1, -1), batch], 0)
+            distances = [get_steps_between(batch, o.reshape(1, -1).repeat(len(batch), 0)) for o in batch]
+            distances = np.stack(distances, 0).astype(np.float64)
+            distances = np.maximum(0., distances)
+            graph = rx.PyDiGraph.from_adjacency_matrix(distances)
+            threshold = maximum_edge_length(graph, 0, 1)
+            graph = rx.PyDiGraph.from_adjacency_matrix(np.where(distances > threshold, 10000, distances))
+            path = [idx for idx in rx.dijkstra_shortest_paths(graph, 0, 1, weight_fn=lambda x: x)[1]]
+            path = path[::max(1, len(path) // finetune_kwargs['sorb_len'])]
 
-            td_filter = jnp.zeros_like(ep_id)
-            same_ep = (ep_id[:-horizon] == ep_id[horizon:])
-            td = ((0.99**horizon) * _values[horizon:] - _values[:-horizon]) * same_ep
-            min_td = jnp.quantile(td, mc_quantile)
-            for h in range(horizon):
-                td_filter = td_filter.at[h:-horizon+h].set(jnp.logical_or((td > min_td) * same_ep, td_filter[h:-horizon+h]))
-            _filter = _filter * td_filter
+            _td_filter = jnp.zeros_like(self.dataset['terminals'])
+            for start_id, end_id in zip(path[:-1], path[1:]):
+                _segment = filter_from_state_goal(self.dataset, batch[start_id], batch[end_id], mc_quantile, mc_slack)
+                _td_filter = np.maximum(_td_filter, _segment)
+            _filter = _filter * _td_filter
 
-            _start_values = []
-            for i in range((len(_obs) // batch_size) + 1):
-                _sli, _ce = i*batch_size, min((i+1)*batch_size, len(_obs))
-                _start_values.append(agent.network.select('value')(obs.reshape(1, -1).repeat(_ce - _sli, 0), _obs[_sli:_ce]))
-            _start_values = jnp.concatenate(_start_values, 0)
-            _start_to_state = (jnp.log((_start_values / (1/(1 - 0.99)) + 1)) / jnp.log(0.99))
-            eq_score = _start_to_state + _state_to_goal  # picking bottom 50% of this score is insufficient
-            eq_filter = eq_score < jnp.quantile(eq_score, eq_quantile)
-            _filter = _filter * eq_filter
+            # TODO: finish writing this
+            # check that trajectories are well selected
+            # try to BC them
+            # or try to AWR with the fixed value
 
-        # old filtering heuristic
-        if finetune_kwargs['filter_by_heuristic']:
-            radius = 2.0
-            # reshaping to (N x H x S)
-            ep_len = np.where(self.dataset['terminals'])[0][0].item() + 2
-            _obs = self.dataset['observations'].reshape(-1, ep_len, obs.shape[-1])
-            assert self.dataset['terminals'].reshape(-1, ep_len)[:, :-2].sum() == 0
-            dist_to_start = ((_obs[..., :2] - obs[:2])**2).sum(-1)
-            # ensuring start and goal appear in the right order
-            start_id = np.argmin(dist_to_start, -1)
-            dist_to_goal = ((_obs[..., :2] - goal[:2])**2).sum(-1)
-            goal_id = np.argmin(dist_to_goal, -1)
-            bad_trajs = (dist_to_start.min(-1) + dist_to_goal.min(-1)) > 2*radius
-            bad_trajs = np.logical_or(bad_trajs, (start_id > goal_id))
-            # lower score is better
-            score = goal_id - start_id
-            score[bad_trajs] += 2*ep_len
-            ep_idxs = np.argsort(score)[:10]
-            heuristic_filter = jnp.zeros_like(ep_id)
-            for ep_idx in ep_idxs:
-                heuristic_filter = heuristic_filter.at[ep_idx*ep_len+start_id[ep_idx]:ep_idx*ep_len+goal_id[ep_idx]+1].set(1.)
-            _filter = _filter * heuristic_filter
+            # this computes values along the graph :)
+            # distances_in_path = np.array([0] + [distances[a, b] for a, b in zip(path[:-1], path[1:])])
+            # distances_in_path = np.cumsum(distances_in_path)
+            # min_steps = np.ones(len(_obs)) * 10000
+            # for idx, dip in zip(path, distances_in_path):
+            #     steps = []
+            #     for i in range((len(_obs) // batch_size) + 1):
+            #         _sli, _ce = i*batch_size, min((i+1)*batch_size, len(_obs))
+            #         steps.append(get_steps_between(_obs[_sli:_ce], _obs[[idx]].repeat(_ce - _sli, 0)))
+            #     steps = np.concatenate(steps, 0)
+            #     steps = np.where(steps > threshold, 10000, steps) + dip
+            #     min_steps = np.minimum(min_steps, steps)
+            # self._values = - (1 - 0.99 ** min_steps) / (1 - 0.99)
+
+            # recursive selection
+            # batch = _obs[np.random.choice(len(_obs), batch_size)]
+            # batch = np.concatenate([obs.reshape(1, -1), batch, goal.reshape(1, -1)])
+            # subgoal_ids = [0, len(batch) - 1]
+            # distances_from = {i: get_steps_between(batch[[i]].repeat(len(batch), 0), batch) for i in subgoal_ids}
+            # distances_to = {i: get_steps_between(batch, batch[[i]].repeat(len(batch), 0)) for i in subgoal_ids}
+            # for _ in range(iters):
+            #     new_subgoals = []
+            #     # new subgoal is al least 0.5 distance away from either
+            #     # it must be closer to neighbors than to second neighbors
+            #     for start_id, end_id in zip(subgoal_ids[:-1], subgoal_ids[1:]):
+            #         half_distance = distances_from[start_id][end_id] / 1.5
+            #         distance_from = np.maximum(distances_from[start_id], half_distance)
+            #         distance_to = np.maximum(distances_to[end_id], half_distance)
+            #         mid_id = np.argmin(np.maximum(distance_from, distance_to)).item()
+            #         distances_from[mid_id] = get_steps_between(batch[[start_id]].repeat(len(batch), 0), batch)
+            #         distances_to[mid_id] = get_steps_between(batch, batch[[end_id]].repeat(len(batch), 0))
+            #         new_subgoals.extend([start_id, mid_id])
+            #     subgoal_ids = new_subgoals + [subgoal_ids[-1]]
+            # print(subgoal_ids)
+            # import matplotlib.pyplot as plt
+            # plt.scatter(batch[:, 0], batch[:, 1], c='red', alpha=0.01)
+            # plt.scatter(batch[subgoal_ids][:, 0], batch[subgoal_ids][:, 1], c=np.arange(len(subgoal_ids)))
+            # plt.savefig('test.png')
+            # plt.close()
+
+            # 0/1 function on BC
+            # _values = []
+            # for i in range((len(_obs) // batch_size) + 1):
+            #     _sli, _ce = i*batch_size, min((i+1)*batch_size, len(_obs))
+            #     _values.append(agent.network.select('value')(_obs[_sli:_ce], goal.reshape(1, -1).repeat(_ce - _sli, 0)))
+            # _values = jnp.concatenate(_values, 0)
+            # _state_to_goal = (jnp.log((_values / (1/(1 - 0.99)) + 1)) / jnp.log(0.99))
+            # td_filter = jnp.zeros_like(ep_id)
+            # same_ep = (ep_id[:-horizon] == ep_id[horizon:])
+            # td = ((0.99**horizon) * _values[horizon:] - _values[:-horizon]) * same_ep
+            # min_td = jnp.quantile(td, mc_quantile)
+            # for h in range(horizon):
+            #     td_filter = td_filter.at[h:-horizon+h].set(jnp.logical_or((td > min_td) * same_ep, td_filter[h:-horizon+h]))
+            # _filter = _filter * td_filter
+
+            # equality
+            # _start_values = []
+            # for i in range((len(_obs) // batch_size) + 1):
+            #     _sli, _ce = i*batch_size, min((i+1)*batch_size, len(_obs))
+            #     _start_values.append(agent.network.select('value')(obs.reshape(1, -1).repeat(_ce - _sli, 0), _obs[_sli:_ce]))
+            # _start_values = jnp.concatenate(_start_values, 0)
+            # _start_to_state = (jnp.log((_start_values / (1/(1 - 0.99)) + 1)) / jnp.log(0.99))
+            # eq_score = _start_to_state + _state_to_goal  # picking bottom 50% of this score is insufficient
+            # eq_filter = eq_score < jnp.quantile(eq_score, eq_quantile)
+            # _filter = _filter * eq_filter
+
+            # how many steps closer?
+            # td_filter = jnp.zeros_like(ep_id)
+            # same_ep = (ep_id[:-horizon] == ep_id[horizon:])
+            # progress = (_state_to_goal[:-horizon] - _state_to_goal[horizon:]) * same_ep * _filter[:-horizon]  # how many steps closer?
+            # min_progress = jnp.quantile(progress, 0.9)
+            # for h in range(horizon):
+            #     td_filter = td_filter.at[h:-horizon+h].set(jnp.logical_or((progress > min_progress) * same_ep, td_filter[h:-horizon+h]))
+            # _filter = _filter * td_filter
+
+        # import matplotlib.pyplot as plt
+        # __obs = _obs[_filter.astype(bool)]
+        # plt.scatter(_obs[:5000, 0], _obs[:5000, 1])
+        # plt.scatter(__obs[:, 0], __obs[:, 1], alpha=0.1)
+        # plt.savefig('zfilter.png')
+        # plt.close()
 
         return _filter
 
