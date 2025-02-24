@@ -4,6 +4,9 @@ import os
 import random
 import time
 from collections import defaultdict
+os.environ['XLA_FLAGS'] = '--xla_gpu_deterministic_ops=true --xla_gpu_autotune_level=0'
+os.environ['TF_DETERMINISTIC_OPS'] = '1'
+os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
 
 import jax
 import numpy as np
@@ -39,6 +42,8 @@ def main(cfg):
     # Set up environment and dataset.
     config = cfg.agent
     env, train_dataset, val_dataset = make_env_and_datasets(cfg.env_name, cfg.data_ratio, frame_stack=config['frame_stack'])
+    env.reset(seed=cfg.seed)
+    env.action_space.seed(cfg.seed)
 
     dataset_class = {
         'GCDataset': GCDataset,
@@ -118,6 +123,14 @@ def main(cfg):
                     eval_temperature=cfg.eval_temperature,
                     eval_gaussian=cfg.eval_gaussian,
                 )
+
+                # import matplotlib.pyplot as plt
+                # _obs = np.stack(trajs[0]['observation'])
+                # _background = train_dataset.sample(1000)['observations']
+                # plt.scatter(_background[:, 0], _background[:, 1])
+                # plt.scatter(_obs[:, 0], _obs[:, 1])
+                # plt.savefig('zfig.png')
+
                 renders.extend(cur_renders)
                 metric_names = ['success']
                 eval_metrics.update(
