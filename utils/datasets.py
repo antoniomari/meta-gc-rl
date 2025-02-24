@@ -79,8 +79,9 @@ def filter_from_state_goal(dataset, obs, goal, quantile, slack):
         candidates = np.where(acc_min == ep_len, ep_len, candidates)
         solutions = np.argmin(candidates, -1)
         goal_offset = np.min(candidates, -1)
-        threshold = np.quantile(goal_offset[goal_offset < ep_len], quantile)
-        threshold = min(threshold, ep_len - 1)  # in case no solutions are found
+        threshold = ep_len - 1  # in case no solutions are found
+        if (goal_offset < ep_len).sum():
+            threshold = np.quantile(goal_offset[goal_offset < ep_len], quantile)
         goal_offset = np.where(goal_offset > threshold, 0, goal_offset)
         goal_offset = np.where(goal_offset > 0, np.minimum(goal_offset + slack, ep_len - solutions), 0)
         col_indices = np.arange(ep_len)
