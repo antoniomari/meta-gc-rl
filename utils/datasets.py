@@ -66,8 +66,8 @@ def filter_from_state_goal(dataset, obs, goal, quantile, slack):
 
     mask = np.zeros_like(ep_id)
     _obs = _obs.reshape(-1, ep_len, _obs.shape[-1])
-    start_matches = jnp.sqrt(((_obs[...] - obs)**2).sum(-1)) < 1.0
-    goal_matches = jnp.sqrt(((_obs[...] - goal)**2).sum(-1)) < 1.0
+    start_matches = jnp.sqrt(((_obs[..., :2] - obs[:2])**2).sum(-1)) < 1.0
+    goal_matches = jnp.sqrt(((_obs[..., :2] - goal[:2])**2).sum(-1)) < 1.0
     filtered_eps = (start_matches.sum(-1) * goal_matches.sum(-1)) > 0
     if filtered_eps.sum():
         goal_matches_id = np.arange(ep_len).reshape(1, -1) * goal_matches
