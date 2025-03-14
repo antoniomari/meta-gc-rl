@@ -11,6 +11,11 @@ from heapq import heappop, heappush
 
 
 def maximum_edge_length(G, source, target):
+    """
+    Finds the highest threshold such that, if all edges longer
+    than the threshold were removed, source and target would
+    be disconnected.
+    """
     dist = {}  # maximum distances
     seen = {source: 0}
     fringe = [(0, source)]
@@ -56,30 +61,49 @@ def batched_random_crop(imgs, crop_froms, padding):
 
 
 def filter_from_state_goal(dataset, obs, goal, quantile, slack):
+    """
+    Low-level logic for on-policy GCFT. It does not consider all possible
+    subjtrajectories, as there would be quadratically many. We simply
+    consider the most promising subtrajectory for each trajectory. This
+    would potentially exclude "useful" data, but only in the case that other data
+    within the same trajectories appears to be more "useful".
+    The logic here is slightly intricate in order to allow for fast
+    parallel computation, please reach out for clarifications :)
+    """
 
     _obs = dataset['observations']
     ep_id = dataset['terminals'].cumsum() // 2
     ep_id[1:] = ep_id[:-1]
     ep_lens = np.unique(ep_id, return_counts= True)[1]
+    # This is needed for parallel computation, but can be worked around
     assert len(set(ep_lens)) == 1, "All episodes need to have the same length."
     ep_len = ep_lens[0].item()
 
     mask = np.zeros_like(ep_id)
     _obs = _obs.reshape(-1, ep_len, _obs.shape[-1])
+    # Find all states "achieving" the start and the goal
+    # The distance threshold is hardcoded, but it matches
+    # the value for most navigation tasks in OGBench.
     start_matches = jnp.sqrt(((_obs[..., :2] - obs[:2])**2).sum(-1)) < 1.0
     goal_matches = jnp.sqrt(((_obs[..., :2] - goal[:2])**2).sum(-1)) < 1.0
+    # Only proceed if there are trajectories matching both start and goal
     filtered_eps = (start_matches.sum(-1) * goal_matches.sum(-1)) > 0
     if filtered_eps.sum():
+        # Here, we are trying to select the best subtrajectory in each matching trajectory
         goal_matches_id = np.arange(ep_len).reshape(1, -1) * goal_matches
         goal_matches_id = np.where(goal_matches_id == 0, ep_len, goal_matches_id)
         acc_min = np.minimum.accumulate(goal_matches_id[..., ::-1], -1)[..., ::-1]
         steps_to_goal = acc_min - np.arange(ep_len).reshape(1, -1)
+        # candidates contains one value for all possible starting states
+        # this value roughly indicates how distant is the closest goal match
         candidates = steps_to_goal * start_matches
         candidates = np.where(candidates == 0, ep_len, candidates)
         candidates = np.where(acc_min == ep_len, ep_len, candidates)
+        # for each trajectory, we select the most promising candidate (highest MC return)
         solutions = np.argmin(candidates, -1)
         goal_offset = np.min(candidates, -1)
         threshold = ep_len - 1  # in case no solutions are found
+        # we further filter these promising candidates, and only take the top quantile%
         if (goal_offset < ep_len).sum():
             threshold = np.quantile(goal_offset[goal_offset < ep_len], quantile)
         goal_offset = np.where(goal_offset > threshold, 0, goal_offset)
@@ -334,17 +358,25 @@ class GCDataset:
 
         return goal_idxs
 
+    # This function implements the main fine-tuning logic for data selection
     def active_sample(self, batch_size: int, _filter, goal, ratio, fix_actor_goal):
+
         finetune_bs = int(batch_size * ratio)
+        # First, sample a batch normally
         uniform_batch = self.sample(batch_size - finetune_bs)
         idxs = np.random.choice(np.where(_filter)[0], finetune_bs)
+        # Then, sample a batch actively
         active_batch = self.sample(finetune_bs, idxs)
+
+        # These next few lines may be used to fix the critic goal to the evaluation one
+        # They are hardcoded, mostly for reference
 
         # active_batch['value_goals'] = active_batch['value_goals'] * 0 + goal
         # successes = (jnp.sqrt(((active_batch['observations'] - active_batch['value_goals'])**2).sum(-1)) < 1).astype(float)
         # active_batch['masks'] = 1.0 - successes
         # active_batch['rewards'] = successes - (1.0 if self.config['gc_negative'] else 0.0)
-        # fix actor goal to fine-tuning goal
+
+        # Fix actor goal to fine-tuning goal
         idxs = np.random.uniform(size=(finetune_bs,)) < fix_actor_goal
         active_batch['actor_goals'][idxs] = goal
 
@@ -370,103 +402,33 @@ class GCDataset:
         if finetune_kwargs['filter_by_td']:
 
             batch_size = 1000
+            # Select a batch of 1000 states to build the graph
             get_steps_between = lambda x, y: jnp.log((agent.network.select('value')(x, y) / (1/(1 - 0.99)) + 1)) / jnp.log(0.99)
             batch = _obs[np.random.choice(len(_obs), batch_size)]
             batch = np.concatenate([obs.reshape(1, -1), goal.reshape(1, -1), batch], 0)
+            # Compute pairwise distances
             distances = [get_steps_between(batch, o.reshape(1, -1).repeat(len(batch), 0)) for o in batch]
             distances = np.stack(distances, 0).astype(np.float64)
             distances = np.maximum(0., distances)
+            # Create graph
             graph = rx.PyDiGraph.from_adjacency_matrix(distances)
+            # Compute the longest edge necessary to connect start and goal
             threshold = maximum_edge_length(graph, 0, 1)
+            # Remove all longer edges to reduce dependency on correct value estimates
             graph = rx.PyDiGraph.from_adjacency_matrix(np.where(distances > threshold, 10000, distances))
+            # Find subgoals on shortest path
             path = [idx for idx in rx.dijkstra_shortest_paths(graph, 0, 1, weight_fn=lambda x: x)[1]]
+            # Prune them to only retain the desired number, more or less
             path = path[::max(1, len(path) // finetune_kwargs['sorb_len'])]
 
+            # Apply on-policy GCFT to all sub-trajectories
             _td_filter = jnp.zeros_like(self.dataset['terminals'])
             for start_id, end_id in zip(path[:-1], path[1:]):
                 _segment = filter_from_state_goal(self.dataset, batch[start_id], batch[end_id], mc_quantile, mc_slack)
                 _td_filter = np.maximum(_td_filter, _segment)
             _filter = _filter * _td_filter
 
-            # TODO: finish writing this
-            # check that trajectories are well selected
-            # try to BC them
-            # or try to AWR with the fixed value
-
-            # this computes values along the graph :)
-            # distances_in_path = np.array([0] + [distances[a, b] for a, b in zip(path[:-1], path[1:])])
-            # distances_in_path = np.cumsum(distances_in_path)
-            # min_steps = np.ones(len(_obs)) * 10000
-            # for idx, dip in zip(path, distances_in_path):
-            #     steps = []
-            #     for i in range((len(_obs) // batch_size) + 1):
-            #         _sli, _ce = i*batch_size, min((i+1)*batch_size, len(_obs))
-            #         steps.append(get_steps_between(_obs[_sli:_ce], _obs[[idx]].repeat(_ce - _sli, 0)))
-            #     steps = np.concatenate(steps, 0)
-            #     steps = np.where(steps > threshold, 10000, steps) + dip
-            #     min_steps = np.minimum(min_steps, steps)
-            # self._values = - (1 - 0.99 ** min_steps) / (1 - 0.99)
-
-            # recursive selection
-            # batch = _obs[np.random.choice(len(_obs), batch_size)]
-            # batch = np.concatenate([obs.reshape(1, -1), batch, goal.reshape(1, -1)])
-            # subgoal_ids = [0, len(batch) - 1]
-            # distances_from = {i: get_steps_between(batch[[i]].repeat(len(batch), 0), batch) for i in subgoal_ids}
-            # distances_to = {i: get_steps_between(batch, batch[[i]].repeat(len(batch), 0)) for i in subgoal_ids}
-            # for _ in range(iters):
-            #     new_subgoals = []
-            #     # new subgoal is al least 0.5 distance away from either
-            #     # it must be closer to neighbors than to second neighbors
-            #     for start_id, end_id in zip(subgoal_ids[:-1], subgoal_ids[1:]):
-            #         half_distance = distances_from[start_id][end_id] / 1.5
-            #         distance_from = np.maximum(distances_from[start_id], half_distance)
-            #         distance_to = np.maximum(distances_to[end_id], half_distance)
-            #         mid_id = np.argmin(np.maximum(distance_from, distance_to)).item()
-            #         distances_from[mid_id] = get_steps_between(batch[[start_id]].repeat(len(batch), 0), batch)
-            #         distances_to[mid_id] = get_steps_between(batch, batch[[end_id]].repeat(len(batch), 0))
-            #         new_subgoals.extend([start_id, mid_id])
-            #     subgoal_ids = new_subgoals + [subgoal_ids[-1]]
-            # print(subgoal_ids)
-            # import matplotlib.pyplot as plt
-            # plt.scatter(batch[:, 0], batch[:, 1], c='red', alpha=0.01)
-            # plt.scatter(batch[subgoal_ids][:, 0], batch[subgoal_ids][:, 1], c=np.arange(len(subgoal_ids)))
-            # plt.savefig('test.png')
-            # plt.close()
-
-            # 0/1 function on BC
-            # _values = []
-            # for i in range((len(_obs) // batch_size) + 1):
-            #     _sli, _ce = i*batch_size, min((i+1)*batch_size, len(_obs))
-            #     _values.append(agent.network.select('value')(_obs[_sli:_ce], goal.reshape(1, -1).repeat(_ce - _sli, 0)))
-            # _values = jnp.concatenate(_values, 0)
-            # _state_to_goal = (jnp.log((_values / (1/(1 - 0.99)) + 1)) / jnp.log(0.99))
-            # td_filter = jnp.zeros_like(ep_id)
-            # same_ep = (ep_id[:-horizon] == ep_id[horizon:])
-            # td = ((0.99**horizon) * _values[horizon:] - _values[:-horizon]) * same_ep
-            # min_td = jnp.quantile(td, mc_quantile)
-            # for h in range(horizon):
-            #     td_filter = td_filter.at[h:-horizon+h].set(jnp.logical_or((td > min_td) * same_ep, td_filter[h:-horizon+h]))
-            # _filter = _filter * td_filter
-
-            # equality
-            # _start_values = []
-            # for i in range((len(_obs) // batch_size) + 1):
-            #     _sli, _ce = i*batch_size, min((i+1)*batch_size, len(_obs))
-            #     _start_values.append(agent.network.select('value')(obs.reshape(1, -1).repeat(_ce - _sli, 0), _obs[_sli:_ce]))
-            # _start_values = jnp.concatenate(_start_values, 0)
-            # _start_to_state = (jnp.log((_start_values / (1/(1 - 0.99)) + 1)) / jnp.log(0.99))
-            # eq_score = _start_to_state + _state_to_goal  # picking bottom 50% of this score is insufficient
-            # eq_filter = eq_score < jnp.quantile(eq_score, eq_quantile)
-            # _filter = _filter * eq_filter
-
-            # how many steps closer?
-            # td_filter = jnp.zeros_like(ep_id)
-            # same_ep = (ep_id[:-horizon] == ep_id[horizon:])
-            # progress = (_state_to_goal[:-horizon] - _state_to_goal[horizon:]) * same_ep * _filter[:-horizon]  # how many steps closer?
-            # min_progress = jnp.quantile(progress, 0.9)
-            # for h in range(horizon):
-            #     td_filter = td_filter.at[h:-horizon+h].set(jnp.logical_or((progress > min_progress) * same_ep, td_filter[h:-horizon+h]))
-            # _filter = _filter * td_filter
+        # Simple visualization of the filter for 2D environments
 
         # import matplotlib.pyplot as plt
         # __obs = _obs[_filter.astype(bool)]

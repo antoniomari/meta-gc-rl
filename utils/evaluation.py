@@ -78,17 +78,23 @@ def evaluate(
         goal = info.get('goal')
         goal_frame = info.get('goal_rendered')
 
+        # Prepare fine-tuning
         old_config = agent.config
         new_config = agent.config.unfreeze()
+        # Override training parameters
         if finetune_config.actor_loss is not None:
             new_config['actor_loss'] = finetune_config.actor_loss
         if finetune_config.alpha is not None:
             new_config['alpha'] = finetune_config.alpha
         new_config = old_config.__class__(new_config)
+        # Copy parameters and state
         old_train_state = copy.deepcopy(agent.network)
         opt_state = agent.network.opt_state
+        # Define new optimizer
         finetune_tx = optax.adam(learning_rate=finetune_config.lr)
         agent = agent.replace(network=agent.network.replace(tx=finetune_tx, opt_state=opt_state), config=new_config)
+
+        # Simple script to plot critic and policy output in a 2D environment
 
         # _batch = train_dataset.sample(10000)
         # def make_plots(suffix):
@@ -109,9 +115,12 @@ def evaluate(
 
         finetune_stats = defaultdict(list)
         if finetune_config.num_steps:
+            # _filter is a binary mask over the entire dataset
             _filter = train_dataset.prepare_active_sample(agent, observation, goal, finetune_config)
+            # Skip fine-tuning if the filter would select nothing
             num_steps = finetune_config.num_steps if _filter.sum() else 0
             for _ in range(num_steps):
+                # Gradient updates
                 batch = train_dataset.active_sample(finetune_config.batch_size, _filter, goal, finetune_config.ratio, finetune_config.fix_actor_goal)
                 agent, info = agent.update(batch)
                 add_to(finetune_stats, flatten(info))
@@ -157,6 +166,7 @@ def evaluate(
         else:
             renders.append(np.array(render))
 
+        # Reset agent parameters and state after each episode
         agent = agent.replace(network=old_train_state, config=old_config)
 
     stats.update({'finetune/' + k: v for k, v in finetune_stats.items()})

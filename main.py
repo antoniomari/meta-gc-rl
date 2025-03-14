@@ -23,7 +23,7 @@ from utils.log_utils import CsvLogger, get_exp_name, get_wandb_video, setup_wand
 
 def main(cfg):
 
-    # load agent defaults
+    # Load agent defaults
     import importlib
     agent_cfg = importlib.import_module(f"agents.{cfg['agent']['agent_name']}").get_config()
     for k, v in agent_cfg.items():
@@ -110,6 +110,7 @@ def main(cfg):
             num_tasks = cfg.eval_tasks if cfg.eval_tasks is not None else len(task_infos)
             for task_id in tqdm.trange(1, num_tasks + 1):
                 task_name = task_infos[task_id - 1]['task_name']
+                # Test-time fine-tuning happens in here
                 eval_info, trajs, cur_renders = evaluate(
                     agent=eval_agent,
                     env=env,
@@ -123,6 +124,10 @@ def main(cfg):
                     eval_temperature=cfg.eval_temperature,
                     eval_gaussian=cfg.eval_gaussian,
                 )
+
+                # Simple script to plot rollouts, assuming that the first 2 dimensions
+                # of the data represent XY CoM coordinates.
+                # TODO: remove
 
                 # import matplotlib.pyplot as plt
                 # _obs = np.stack(trajs[0]['observation'])

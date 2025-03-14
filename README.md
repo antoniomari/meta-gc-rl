@@ -1,3 +1,22 @@
+# Goal-conditioned Offline Fine-tuning
+
+Implementation of test-time fine-tuning for goal-conditioned agents. The codebase borrows heavily from OGBench (original README follows).
+
+To install, simply
+
+```shell
+pip install -r requirements.txt
+```
+
+The basic command to run an experiment is 
+
+```shell
+python main.py default.yaml
+```
+
+where the `default.yaml` specifies environment parameters.
+This particular interface allos using `clus` (contact Marco for access) to run sweeps on the MPI Cluster or Euler.
+
 <div align="center">
 <img src="assets/ogbench.svg" width="300px"/>
 
