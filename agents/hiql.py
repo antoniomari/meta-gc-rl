@@ -153,9 +153,20 @@ class HIQLAgent(flax.struct.PyTreeNode):
         network.params[f'modules_target_{module_name}'] = new_target_params
 
     @jax.jit
-    def update(self, batch):
+    def update(self, batch, finetuning=False):
         """Update the agent and return a new agent with information dictionary."""
         new_rng, rng = jax.random.split(self.rng)
+
+        # We need to sample the subgoal representations from the high-level actor to change batch['low_actor_goals'] to these goal reps
+        # here are sampling code that we inspire from:
+        # # high_dist = self.network.select('high_actor')(observations, goals, temperature=temperature)
+        # # goal_reps = high_dist.sample(seed=high_seed)
+        # # goal_reps = goal_reps / jnp.linalg.norm(goal_reps, axis=-1, keepdims=True) * jnp.sqrt(goal_reps.shape[-1])
+        if finetuning:
+            high_dist = self.network.select('high_actor')(batch['observations'], batch['high_actor_goals'])
+            goal_reps = high_dist.sample(seed=new_rng)
+            goal_reps = goal_reps / jnp.linalg.norm(goal_reps, axis=-1, keepdims=True) * jnp.sqrt(goal_reps.shape[-1])
+            batch = batch.replace(low_actor_goals=goal_reps)
 
         def loss_fn(grad_params):
             return self.total_loss(batch, grad_params, rng=rng)

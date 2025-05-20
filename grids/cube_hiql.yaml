@@ -1,0 +1,49 @@
+name:  &job_name cube-hiql
+results_dir: /fast/malbaba/results/offline_finetuning
+git_branch: main
+git_commit: null
+script_path: main.py
+pre_script: null
+cluster_requirements:
+  cpus: 8
+  ram: 64G
+  gpus: 1
+  disk: 64G
+  bid: 25
+  forbidden_hostnames: ['g054']
+  time: 24:00:00
+default_params: default.yaml
+grid:
+  run_group: *job_name
+  train_steps: 800000
+  eval_interval: 50000
+  eval_start: 600000
+  log_interval: 5000
+  save_interval: 50000
+  eval_on_cpu: 0
+  eval_episodes: 5
+  env_name: [cube-single-play-v0] #, cube-double-play-v0]
+  '[agent.agent_name, agent.actor_loss, finetune.actor_loss, agent.alpha, agent.high_alpha, agent.low_alpha, agent.subgoal_steps]': [
+    [hiql, awr, awr, 1.0, 3.0, 3.0, 10]
+  ]
+  
+  finetune.cube_env: true
+  finetune.lr: 3.e-4
+  finetune.ratio: 1.0
+  finetune.fix_actor_goal: 1.0
+  finetune.filter_by_td: false
+  finetune.sorb_len: 5
+  finetune.td_correction_horizon: 20
+  finetune.td_quantile: 0.2
+  finetune.filter_by_argmax: false
+  finetune.filter_by_nstep_td: false
+  finetune.max_steps: 15
+
+  '[finetune.num_steps, finetune.filter_by_mc, finetune.mc_quantile, finetune.mc_slack, finetune.mc_similarity_threshold, finetune.filter_by_recursive_mdp, finetune.replan_horizon, finetune.min_steps, finetune.recursive_selected_num_points]': [
+    [100, false, 0.2, 10, 1.0, false, 100, 10, 10], # This is default one wout ft
+    [100, true, 0.2, 10, 1.0, false, 100, 10, 10],
+    [100, false, 0.2, 10, 1.0, true, 100, 10, 10]
+  ]
+
+  seed: [0, 1, 2]
+

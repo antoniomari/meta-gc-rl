@@ -59,8 +59,188 @@ def batched_random_crop(imgs, crop_froms, padding):
     """Batched version of random_crop."""
     return jax.vmap(random_crop, (0, 0, None))(imgs, crop_froms, padding)
 
+import numpy as np
 
-def filter_from_state_goal(dataset, obs, goal, quantile, slack):
+def extract_cube_positions_from_full_obs(observation_array, proprio_dim, num_cubes, state_dim_per_cube=9, pos_dim_per_cube=3):
+    """
+    Extracts concatenated cube positions from a full observation array.
+    Handles both single (1D) and batched (nD) observation arrays.
+    The positions are the first `pos_dim_per_cube` elements of each cube's state block.
+    """
+    positions_list = []
+    for i in range(num_cubes):
+        start_idx = proprio_dim + i * state_dim_per_cube
+        
+        if observation_array.ndim == 1: # Single observation (e.g., current `obs`)
+            positions_list.append(observation_array[start_idx : start_idx + pos_dim_per_cube])
+        else: # Batched observations (e.g., dataset `_obs`)
+            positions_list.append(observation_array[..., start_idx : start_idx + pos_dim_per_cube])
+
+    # Concatenate along the last dimension for batched, or axis 0 for single
+    if observation_array.ndim == 1:
+        return np.concatenate(positions_list, axis=0)
+    else:
+        return np.concatenate(positions_list, axis=-1)
+
+
+def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist=None):
+    _obs = dataset['observations']
+    ep_id = dataset['terminals'].cumsum() // 2
+    ep_id[1:] = ep_id[:-1]
+    ep_lens = np.unique(ep_id, return_counts= True)[1]
+    assert len(set(ep_lens)) == 1, "All episodes need to have the same length."
+    ep_len = ep_lens[0].item()
+
+    subtraj_min_steps = finetune_kwargs.get('min_steps', 10)
+    start_threshold   = finetune_kwargs.get('mc_similarity_threshold', 1.0)
+    num_selected_points  = finetune_kwargs.get('recursive_selected_num_points', 10)
+    non_optimality = finetune_kwargs.get('no_optimality', False) # if true we only sample transitions close to the state regardless of whether they are any good
+    non_relevance = finetune_kwargs.get('no_relevance', False) # if true we sample transitions from the buffer that are good under the optimality criterion but may be from anywhere over the state space (not necessarily close to our agents state)
+    cube_env = finetune_kwargs.get('cube_env', False)
+
+    # --- Start NaN Handling ---
+    if state_to_goal_dist is not None:
+        state_to_goal_dist_np = np.array(state_to_goal_dist) # Convert to NumPy for handling
+        nan_mask = np.isnan(state_to_goal_dist_np)
+        num_nans = nan_mask.sum()
+        if num_nans > 0:
+            # Choose a large value (effectively infinity for practical purposes)
+            large_value = np.finfo(state_to_goal_dist_np.dtype).max / 2
+            state_to_goal_dist_np[nan_mask] = large_value
+            state_to_goal_dist = jnp.array(state_to_goal_dist_np) # Convert back to JAX array
+    # --- End NaN Handling ---
+    
+    mask = np.zeros_like(ep_id)
+    _obs = _obs.reshape(-1, ep_len, _obs.shape[-1])
+
+    if cube_env:
+        proprio_dim = finetune_kwargs['proprio_dim']
+        num_cubes = finetune_kwargs['num_cubes']
+        
+        # Extract cube positions from current observation (obs)
+        # obs is 1D array (current environment observation)
+        current_obs_cube_positions = extract_cube_positions_from_full_obs(obs, proprio_dim, num_cubes)
+        
+        # Extract cube positions from dataset observations (_obs_reshaped)
+        # _obs_reshaped has shape (num_episodes, ep_len, feature_dim)
+        dataset_cube_positions = extract_cube_positions_from_full_obs(_obs, proprio_dim, num_cubes)
+        
+        # Calculate distance for start_matches
+        # Resulting shape for start_matches_dist: (num_episodes, ep_len)
+        start_matches_dist = jnp.sqrt(jnp.sum((dataset_cube_positions - current_obs_cube_positions)**2, axis=-1))
+        start_matches = start_matches_dist < start_threshold
+
+        if non_relevance:
+            # If non-relevance is enabled, we sample transitions from the buffer that are good under the optimality criterion but may be from anywhere over the state space (not necessarily close to our agent's state)
+            start_matches = jnp.sqrt(jnp.sum((_obs[..., :2] - obs[:2])**2, axis=-1)) < 10000.0
+    
+    else: # Original maze logic
+        # obs is 1D, _obs_reshaped is (num_episodes, ep_len, feature_dim)
+        start_matches = jnp.sqrt(jnp.sum((_obs[..., :2] - obs[:2])**2, axis=-1)) < start_threshold
+        if non_relevance:
+            # If non-relevance is enabled, we sample transitions from the buffer that are good under the optimality criterion but may be from anywhere over the state space (not necessarily close to our agent's state)
+            start_matches = jnp.sqrt(jnp.sum((_obs[..., :2] - obs[:2])**2, axis=-1)) < 10000.0
+
+    #start_matches = jnp.sqrt(((_obs[..., :2] - obs[:2])**2).sum(-1)) < start_threshold
+
+    # Debugging: log start_matches sum, log jnp.isnan(state_to_goal_dist).sum() and log jnp.isinf(state_to_goal_dist).sum()
+    import wandb
+    #wandb.log({"Debug/Start Matches Sum": start_matches.sum()})
+    #wandb.log({"Debug/State to Goal Dist NaN Count": jnp.isnan(state_to_goal_dist).sum()})
+    #wandb.log({"Debug/State to Goal Dist Inf Count": jnp.isinf(state_to_goal_dist).sum()})
+    # - End debugging
+
+    ## Debugging: plot state_to_goal_dist
+    if False:
+        import io
+        import matplotlib.pyplot as plt
+        from PIL import Image
+        import wandb
+        dist_data_np = np.array(state_to_goal_dist)
+        dist_data_np = dist_data_np[np.isfinite(dist_data_np)] # Filter out non-finite values for plotting
+
+        if dist_data_np.size > 0: # Check if there's any data to plot
+            fig, ax = plt.subplots()
+            ax.hist(dist_data_np, bins=500) # Plot a histogram, adjust bins as needed
+            ax.set_title('Distribution of Estimated State-to-Goal Distance')
+            ax.set_xlabel('Estimated Steps to Goal')
+            ax.set_ylabel('Frequency')
+            plt.tight_layout() # Adjust plot layout
+
+            # Save plot to an in-memory buffer
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png') # Save as PNG format
+            buf.seek(0) # Rewind buffer to the beginning
+
+            # Log the plot image to WandB
+            # Use a descriptive key name for WandB dashboard
+            img = Image.open(buf)
+            img_array = np.array(img)
+            wandb.log({"Debug/state_to_goal_distance_distribution": wandb.Image(img_array)})
+            del img, img_array, buf
+            plt.close() # Close the plot to free memory
+        else:
+            print("Warning: No finite data points to plot for state_to_goal_dist.")
+    # - End plotting
+    #  
+    # Debugging: plot start distances
+    if False:
+        import io
+        import matplotlib.pyplot as plt
+        from PIL import Image
+        import wandb
+        start_dist = ((_obs[..., :2] - obs[:2])**2)
+        start_dist_np = np.array(start_dist)
+        start_dist_np = start_dist_np[np.isfinite(start_dist_np)] # Filter out non-finite values for plotting
+        if start_dist_np.size > 0: 
+            fig, ax = plt.subplots()
+            ax.hist(start_dist_np, bins=50) # Plot a histogram, adjust bins as needed
+            ax.set_title('Distribution of Estimated Distance to start point')
+            ax.set_xlabel('Estimated distance')
+            ax.set_ylabel('Frequency')
+            plt.tight_layout() # Adjust plot layout
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png') # Save as PNG format
+            buf.seek(0) # Rewind buffer to the beginning
+            img = Image.open(buf)
+            img_array = np.array(img)
+            wandb.log({'Debug/Start Distance Distribution': wandb.Image(img_array)})
+            del img, img_array, buf
+            plt.close() # Close the plot to free memory
+    # - End plotting
+
+    if state_to_goal_dist is not None:
+        shift_start_matches = np.zeros_like(start_matches)
+        shift_start_matches[:, subtraj_min_steps:] = start_matches[:, :-subtraj_min_steps]
+        # Debugging: log start_matches sum
+        #import wandb
+        #wandb.log({"Debug/Shifted Start Matches Sum": start_matches.sum()})
+        # - End debugging
+
+
+        scores = ((shift_start_matches.cumsum(-1) > 0) * state_to_goal_dist.reshape(start_matches.shape))
+        scores = np.where(scores==0, scores.max(), scores)
+        ep_idxs = np.argsort(scores.min(-1))[:num_selected_points]
+
+        if non_optimality:
+            # randomly select from  np.argsort(scores.min(-1)) instead of taking the best ones
+            ep_idxs = np.random.choice(np.arange(len(scores)), num_selected_points, replace=False)
+
+        ## Debug: Log selected episode indices and their scores
+        #import wandb
+        #wandb.log({"Debug/Selected Episode Indices": ep_idxs})
+        #wandb.log({"Debug/Selected Episode Scores": scores[ep_idxs].min(-1)})
+        ## - End debug
+
+        mask = mask.reshape(-1, ep_len)
+        mask[ep_idxs] = 1.
+        mask *= (start_matches.cumsum(-1) > 0)  # only keep from matches
+        col_indices = np.arange(ep_len)
+        mask *= col_indices[None] < scores.argmin(-1)[..., None]  # discard after best point
+        return mask.flatten()
+
+
+def filter_from_state_goal(dataset, obs, goal, quantile, slack, sim_threshold, finetune_kwargs=None):
     """
     Low-level logic for on-policy GCFT. It does not consider all possible
     subjtrajectories, as there would be quadratically many. We simply
@@ -71,10 +251,15 @@ def filter_from_state_goal(dataset, obs, goal, quantile, slack):
     parallel computation, please reach out for clarifications :)
     """
 
+    cube_env = finetune_kwargs.get('cube_env', False)
+    if cube_env:
+        proprio_dim = finetune_kwargs['proprio_dim']
+        num_cubes = finetune_kwargs['num_cubes']
+
     _obs = dataset['observations']
     ep_id = dataset['terminals'].cumsum() // 2
     ep_id[1:] = ep_id[:-1]
-    ep_lens = np.unique(ep_id, return_counts= True)[1]
+    ep_lens = np.unique(ep_id, return_counts=True)[1]
     # This is needed for parallel computation, but can be worked around
     assert len(set(ep_lens)) == 1, "All episodes need to have the same length."
     ep_len = ep_lens[0].item()
@@ -84,10 +269,42 @@ def filter_from_state_goal(dataset, obs, goal, quantile, slack):
     # Find all states "achieving" the start and the goal
     # The distance threshold is hardcoded, but it matches
     # the value for most navigation tasks in OGBench.
-    start_matches = jnp.sqrt(((_obs[..., :2] - obs[:2])**2).sum(-1)) < 1.0
-    goal_matches = jnp.sqrt(((_obs[..., :2] - goal[:2])**2).sum(-1)) < 1.0
+
+    if cube_env:
+        current_obs_cube_positions = extract_cube_positions_from_full_obs(obs, proprio_dim, num_cubes)
+        dataset_cube_positions = extract_cube_positions_from_full_obs(_obs, proprio_dim, num_cubes)
+        goal_cube_positions = goal # goal is already [pos1, pos2, ...] for CubeEnv
+        goal_is_oracle_representation = finetune_kwargs.get('goal_is_oracle_rep', True)
+
+        if goal_is_oracle_representation:
+            # Goal is already in the format [pos1_scaled, pos2_scaled, ...] (shape: num_cubes * 3)
+            goal_cube_positions = goal
+            # Sanity check for expected shape if it's an oracle goal
+            expected_shape = (num_cubes * 3,)
+            if goal.shape != expected_shape:
+                print(f"Warning: 'goal_is_oracle_rep' is True, but goal shape is {goal.shape}, expected {expected_shape}. This might lead to errors.")
+                # This implies a mismatch in configuration or how goal_is_oracle_rep was set.
+                # For the error (1000,1001,3) vs (28,), if num_cubes=1, then goal.shape here *must* be (3,).
+                # If it's (28,), then goal_is_oracle_representation should have been False.
+        else:
+            # Goal is a full observation of the goal state. Extract cube positions from it.
+            # Input `goal` shape e.g. (28,) for num_cubes=1, proprio_dim=19
+            # Output `goal_cube_positions` shape (num_cubes * 3,), e.g. (3,) for num_cubes=1
+            goal_cube_positions = extract_cube_positions_from_full_obs(goal, proprio_dim, num_cubes)
+
+        start_matches_dist = jnp.sqrt(jnp.sum((dataset_cube_positions - current_obs_cube_positions)**2, axis=-1))
+        start_matches = start_matches_dist < sim_threshold
+
+        # This line should now work if goal_cube_positions is correctly shaped to (num_cubes * 3,)
+        goal_matches_dist = jnp.sqrt(jnp.sum((dataset_cube_positions - goal_cube_positions)**2, axis=-1))
+        goal_matches = goal_matches_dist < sim_threshold
+
+    else: # Original maze logic
+        start_matches = jnp.sqrt(jnp.sum((_obs[..., :2] - obs[:2]) ** 2, axis=-1)) < sim_threshold
+        goal_matches = jnp.sqrt(jnp.sum((_obs[..., :2] - goal[:2]) ** 2, axis=-1)) < sim_threshold
+
     # Only proceed if there are trajectories matching both start and goal
-    filtered_eps = (start_matches.sum(-1) * goal_matches.sum(-1)) > 0
+    filtered_eps = (start_matches.sum(-1) * goal_matches.sum(-1)) > 0 
     if filtered_eps.sum():
         # Here, we are trying to select the best subtrajectory in each matching trajectory
         goal_matches_id = np.arange(ep_len).reshape(1, -1) * goal_matches
@@ -102,14 +319,13 @@ def filter_from_state_goal(dataset, obs, goal, quantile, slack):
         # for each trajectory, we select the most promising candidate (highest MC return)
         solutions = np.argmin(candidates, -1)
         goal_offset = np.min(candidates, -1)
-        threshold = ep_len - 1  # in case no solutions are found
-        # we further filter these promising candidates, and only take the top quantile%
+        threshold = ep_len - 1   
         if (goal_offset < ep_len).sum():
             threshold = np.quantile(goal_offset[goal_offset < ep_len], quantile)
         goal_offset = np.where(goal_offset > threshold, 0, goal_offset)
         goal_offset = np.where(goal_offset > 0, np.minimum(goal_offset + slack, ep_len - solutions), 0)
         col_indices = np.arange(ep_len)
-        mask = (col_indices >= solutions[:, np.newaxis]) & (col_indices < (solutions + goal_offset)[:, np.newaxis])        
+        mask = (col_indices >= solutions[:, np.newaxis]) & (col_indices < (solutions + goal_offset)[:, np.newaxis])
 
     return mask.flatten()
 
@@ -359,7 +575,7 @@ class GCDataset:
         return goal_idxs
 
     # This function implements the main fine-tuning logic for data selection
-    def active_sample(self, batch_size: int, _filter, goal, ratio, fix_actor_goal):
+    def active_sample(self, batch_size: int, _filter, goal, ratio, fix_actor_goal, is_hiql = False):
 
         finetune_bs = int(batch_size * ratio)
         # First, sample a batch normally
@@ -378,64 +594,80 @@ class GCDataset:
 
         # Fix actor goal to fine-tuning goal
         idxs = np.random.uniform(size=(finetune_bs,)) < fix_actor_goal
-        active_batch['actor_goals'][idxs] = goal
+        if not is_hiql:
+            active_batch['actor_goals'][idxs] = goal
+        else:
+            # set both low_actor_goals and high_actor_goals to goal
+            # active_batch['low_actor_goals'][idxs] = goal
+            # active_batch['high_actor_goals'][idxs] = goal
+            
+            # we need to set high actor goals to goal
+            active_batch['high_actor_goals'][idxs] = goal 
+            # then set low actor goals to the ones selected by the agent
+            
 
         return {k: np.concatenate([uniform_batch[k], active_batch[k]]) for k in uniform_batch}
 
-    def prepare_active_sample(self, agent, obs, goal, finetune_kwargs, batch_size=2048):
-
+    def prepare_active_sample(self, agent, obs, goal, finetune_kwargs, batch_size=2048, exp_name = None,
+                              log_filter=True, is_hiql = False):
+        #print(f"Preparing active sample with obs: {obs}, goal: {goal}")
         _obs = self.dataset['observations']
         _filter = jnp.ones_like(self.dataset['terminals'])
         mc_quantile = finetune_kwargs['mc_quantile']
         mc_slack = finetune_kwargs['mc_slack']
+        mc_similarity_threshold = finetune_kwargs['mc_similarity_threshold']
 
         # On-policy filtering: only find "optimal trajectories", no stitching
         # - trajectories with high Monte-Carlo returns
         # - trajectory passes close to current state (in terms of reward)
         if finetune_kwargs['filter_by_mc']:
-            mc_filter = filter_from_state_goal(self.dataset, obs, goal, mc_quantile, mc_slack)
+            mc_filter = filter_from_state_goal(self.dataset, obs, goal, mc_quantile, mc_slack, mc_similarity_threshold, finetune_kwargs)
             _filter = _filter * mc_filter
 
-        # Off-policy filtering (needs a value function, can stitch)
-        # - (sub)trajectories with low TD-error mean_t (V(s_t+1) - \gammaV(s_t))^2
-        # - state respects triangle inequality
-        if finetune_kwargs['filter_by_td']:
+        elif finetune_kwargs.get('random_selection', False):
+            # Randomly select 10k transitions for fine-tuning.
+            _filter = np.zeros_like(self.dataset['terminals'])
+            _filter[np.random.choice(len(_obs), 10000)] = 1.
 
-            batch_size = 1000
-            # Select a batch of 1000 states to build the graph
-            get_steps_between = lambda x, y: jnp.log((agent.network.select('value')(x, y) / (1/(1 - 0.99)) + 1)) / jnp.log(0.99)
-            batch = _obs[np.random.choice(len(_obs), batch_size)]
-            batch = np.concatenate([obs.reshape(1, -1), goal.reshape(1, -1), batch], 0)
-            # Compute pairwise distances
-            distances = [get_steps_between(batch, o.reshape(1, -1).repeat(len(batch), 0)) for o in batch]
-            distances = np.stack(distances, 0).astype(np.float64)
-            distances = np.maximum(0., distances)
-            # Create graph
-            graph = rx.PyDiGraph.from_adjacency_matrix(distances)
-            # Compute the longest edge necessary to connect start and goal
-            threshold = maximum_edge_length(graph, 0, 1)
-            # Remove all longer edges to reduce dependency on correct value estimates
-            graph = rx.PyDiGraph.from_adjacency_matrix(np.where(distances > threshold, 10000, distances))
-            # Find subgoals on shortest path
-            path = [idx for idx in rx.dijkstra_shortest_paths(graph, 0, 1, weight_fn=lambda x: x)[1]]
-            # Prune them to only retain the desired number, more or less
-            path = path[::max(1, len(path) // finetune_kwargs['sorb_len'])]
+        elif finetune_kwargs.get('filter_by_recursive_mdp', False):
+            _values = []
+            batch_size=10000
+            for i in range((len(_obs) // batch_size) + 1):
+                _sli, _ce = i*batch_size, min((i+1)*batch_size, len(_obs))
+                if not is_hiql:
+                    _values.append(agent.network.select('value')(_obs[_sli:_ce], goal.reshape(1, -1).repeat(_ce - _sli, 0)))
+                else:
+                    (v1,v2) = agent.network.select('value')(_obs[_sli:_ce], goal.reshape(1, -1).repeat(_ce - _sli, 0))
+                    _values.append((v1+v2)/2)
+                    del v1, v2
+            _values = jnp.concatenate(_values, 0)
+            state_to_goal_dist = (jnp.log((_values/(1/(1 - 0.99)) + 1)) / jnp.log(0.99))
+            td_filter = filter_by_recursive_mdp(self.dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist)
+            _filter = _filter * td_filter 
 
-            # Apply on-policy GCFT to all sub-trajectories
-            _td_filter = jnp.zeros_like(self.dataset['terminals'])
-            for start_id, end_id in zip(path[:-1], path[1:]):
-                _segment = filter_from_state_goal(self.dataset, batch[start_id], batch[end_id], mc_quantile, mc_slack)
-                _td_filter = np.maximum(_td_filter, _segment)
-            _filter = _filter * _td_filter
-
+        
         # Simple visualization of the filter for 2D environments
+        if log_filter:
+            import matplotlib.pyplot as plt
+            import io
+            import wandb
+            from PIL import Image
+            filtered_pbs = _obs[_filter.astype(bool)]
 
-        # import matplotlib.pyplot as plt
-        # __obs = _obs[_filter.astype(bool)]
-        # plt.scatter(_obs[:5000, 0], _obs[:5000, 1])
-        # plt.scatter(__obs[:, 0], __obs[:, 1], alpha=0.1)
-        # plt.savefig('zfilter.png')
-        # plt.close()
+            try:
+                buf = io.BytesIO()
+                plt.scatter(_obs[:5000, 0], _obs[:5000, 1])
+                plt.scatter(filtered_pbs[:, 0], filtered_pbs[:, 1], alpha=0.5)
+                #plt.savefig(f'Zfilter_{exp_name}.png')
+                plt.savefig(buf, format='png')
+                plt.close()
+                buf.seek(0)
+                wandb.log({'ZFilter': wandb.Image(np.array(Image.open(buf)))})
+                del buf
+            except Exception as e:
+                print(f"Error in logging filter image: {e}")
+                plt.close()
+            # wandb.log({'ZFilter': wandb.Image(f'Zfilter_{exp_name}.png')})
 
         return _filter
 

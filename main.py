@@ -8,10 +8,10 @@ os.environ['XLA_FLAGS'] = '--xla_gpu_deterministic_ops=true --xla_gpu_autotune_l
 os.environ['TF_DETERMINISTIC_OPS'] = '1'
 os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
 
+import wandb
 import jax
 import numpy as np
 import tqdm
-import wandb
 from agents import agents
 from ml_collections import FrozenConfigDict
 from utils.datasets import Dataset, GCDataset, HGCDataset
@@ -32,8 +32,12 @@ def main(cfg):
     cfg = FrozenConfigDict(cfg)
 
     # Set up logger.
-    exp_name = get_exp_name(cfg.seed)
-    setup_wandb(project='OGBench', group=cfg.run_group, name=exp_name, config=cfg.to_dict())
+    # split env_name by '-'
+    env_name_split = cfg.env_name.split('-')
+    # set wandb_env_name as the first part and second part of env_name_split
+    wandb_env_name = env_name_split[0] + '-' + env_name_split[2]
+    exp_name = get_exp_name(cfg)
+    setup_wandb(project='TTT', group=cfg.run_group, name=exp_name, config=cfg.to_dict())
 
     os.makedirs(cfg.working_dir, exist_ok=True)
     with open(os.path.join(cfg.working_dir, 'config.yaml'), 'w') as f:
@@ -98,7 +102,7 @@ def main(cfg):
             train_logger.log(train_metrics, step=i)
 
         # Evaluate agent.
-        if i % cfg.eval_interval == 0:
+        if i % cfg.eval_interval == 0 and i > cfg.eval_start:
             if cfg.eval_on_cpu:
                 eval_agent = jax.device_put(agent, device=jax.devices('cpu')[0])
             else:
@@ -123,36 +127,91 @@ def main(cfg):
                     video_frame_skip=cfg.video_frame_skip,
                     eval_temperature=cfg.eval_temperature,
                     eval_gaussian=cfg.eval_gaussian,
+                    exp_name=exp_name,
                 )
 
                 # Simple script to plot rollouts, assuming that the first 2 dimensions
                 # of the data represent XY CoM coordinates.
                 # TODO: remove
+                plotit = True
+                if plotit:
+                    import matplotlib.pyplot as plt
+                    import io
+                    #import wandb
+                    from PIL import Image
+                    buf = io.BytesIO()
+                    _obs = np.stack(trajs[0]['observation'])
+                    _background = train_dataset.sample(1000)['observations']
+                    plt.scatter(_background[:, 0], _background[:, 1])
+                    plt.scatter(_obs[:, 0], _obs[:, 1])
+                    #plt.savefig(f'Zfig_{exp_name}.png', dpi=900)
+                    plt.savefig(buf, format='png', dpi=900)
+                    plt.close()
+                    buf.seek(0)
+                    img = Image.open(buf)
+                    img_array = np.array(img)
+                    wandb.log({'Zfig': wandb.Image(img_array)})
+                    del img_array, img, buf
+                    #                 # log the figure
+                    #wandb.log({"ZFig": wandb.Image(f'Zfig_{exp_name}.png')})
+                
 
-                # import matplotlib.pyplot as plt
-                # _obs = np.stack(trajs[0]['observation'])
-                # _background = train_dataset.sample(1000)['observations']
-                # plt.scatter(_background[:, 0], _background[:, 1])
-                # plt.scatter(_obs[:, 0], _obs[:, 1])
-                # plt.savefig('zfig.png')
-
+                  # --- MINIMAL MODIFICATION START ---
+                
+                finetune_actor_loss_key = 'finetune/actor/actor_loss'
+                # Check for the specific key and add its list to eval_metrics
+                if finetune_actor_loss_key in eval_info:
+                    loss_list_raw = eval_info[finetune_actor_loss_key]
+                    if isinstance(loss_list_raw, list): # Make sure it's a list
+                        try:
+                            # Convert JAX arrays/other numerics to standard Python floats
+                            loss_values_float = [float(val.item()) if hasattr(val, 'item') else float(val)
+                                                for val in loss_list_raw]
+                            
+                            # Add the list directly to eval_metrics.
+                            # Use a key that indicates it's the raw trend/list.
+                            # Replace '/' in the metric name segment with '_' for cleaner W&B key
+                            log_key_segment = finetune_actor_loss_key.replace("/", "_")
+                            eval_metrics[f'finetune/{task_name}_{log_key_segment}_trend'] = loss_values_float
+                        except Exception as e:
+                            # Log a warning if conversion fails, but don't crash
+                            print(f"Warning: Could not process {finetune_actor_loss_key} list for task {task_name}: {e}")
+                # --- MINIMAL MODIFICATION END ---
+                
                 renders.extend(cur_renders)
                 metric_names = ['success']
                 eval_metrics.update(
                     {f'evaluation/{task_name}_{k}': v for k, v in eval_info.items() if k in metric_names}
                 )
+                # wandb.log({f'evaluation_logged/{task_name}_{k}': v for k, v in eval_info.items() if k in metric_names})
                 for k, v in eval_info.items():
                     if k in metric_names:
                         overall_metrics[k].append(v)
+
             for k, v in overall_metrics.items():
                 eval_metrics[f'evaluation/overall_{k}'] = np.mean(v)
-
+                #wandb.log(f'evaluation_logged/overall_{k}', np.mean(v))
+            
             if cfg.video_episodes > 0:
                 video = get_wandb_video(renders=renders, n_cols=num_tasks)
                 eval_metrics['video'] = video
 
-            wandb.log(eval_metrics, step=i)
-            eval_logger.log(eval_metrics, step=i)
+            try:
+                # Assuming 'i' is your global training step counter
+                wandb.log(eval_metrics)
+            except Exception as e:
+                print(f"Error during wandb.log: {e}")
+
+             # Log to the separate eval_logger if it exists
+            try:
+                eval_logger.log(eval_metrics, step=i)
+            except Exception as e:
+                print(f"Error logging to eval_logger: {e}")
+            
+            #wandb.log(eval_metrics)
+            #eval_logger.log(eval_metrics, step=i)
+
+            time.sleep(10) # Sleep for a minute to avoid too many logs in a short time.
 
         # Save agent.
         if i % cfg.save_interval == 0:

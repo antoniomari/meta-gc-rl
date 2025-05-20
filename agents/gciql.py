@@ -174,7 +174,7 @@ class GCIQLAgent(flax.struct.PyTreeNode):
         network.params[f'modules_target_{module_name}'] = new_target_params
 
     @jax.jit
-    def update(self, batch):
+    def update(self, batch, finetuning=False):
         """Update the agent and return a new agent with information dictionary."""
         new_rng, rng = jax.random.split(self.rng)
 

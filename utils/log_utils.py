@@ -37,17 +37,47 @@ class CsvLogger:
             self.file.close()
 
 
-def get_exp_name(seed):
+def get_exp_name(cfg):
     """Return the experiment name."""
-    exp_name = ''
-    exp_name += f'sd{seed:03d}_'
-    if 'SLURM_JOB_ID' in os.environ:
-        exp_name += f's_{os.environ["SLURM_JOB_ID"]}.'
-    if 'SLURM_PROCID' in os.environ:
-        exp_name += f'{os.environ["SLURM_PROCID"]}.'
-    exp_name += f'{datetime.now().strftime("%Y%m%d_%H%M%S")}'
-
+    # experiment name consists:
+    # agent_name (gciql or hiql)
+    # environment name parts: env_name_split[0] + '-' + env_name_split[2]
+    # agent.actor_loss (bc or awr)
+    # finetune.actor_loss (bc or awr)
+    # finetune.filter_by_mc
+    # finetune.mc_quantile
+    # finetune.mc_slack
+    # finetune.mc_similarity_threshold
+    # finetune.filter_by_recursive_mdp
+    # finetune.min_steps
+    # finetune.replan_horizon
+    # timestamp
+    # seed
+    exp_name = cfg.agent.agent_name
+    env_name_split = cfg.env_name.split('-')
+    exp_name += '_' + env_name_split[0] + '-' + env_name_split[2]
+    exp_name += '_' + cfg.agent.actor_loss
+    exp_name += '_' + cfg.finetune.actor_loss
+    exp_name += '_' + str(cfg.finetune.filter_by_mc)
+    exp_name += '_' + str(cfg.finetune.mc_quantile)
+    exp_name += '_' + str(cfg.finetune.mc_slack)
+    exp_name += '_' + str(cfg.finetune.mc_similarity_threshold)
+    exp_name += '_' + str(cfg.finetune.filter_by_recursive_mdp)
+    exp_name += '_' + str(cfg.finetune.min_steps)
+    exp_name += '_' + str(cfg.finetune.replan_horizon)
+    exp_name += '_' + datetime.now().strftime('%Y%m%d_%H%M%S')
+    exp_name += f'_s{cfg.seed:03d}'
     return exp_name
+
+    # exp_name = '' if env_name is None else env_name + '_'
+    # exp_name += f'sd{seed:03d}_'
+    # if 'SLURM_JOB_ID' in os.environ:
+    #     exp_name += f's_{os.environ["SLURM_JOB_ID"]}.'
+    # if 'SLURM_PROCID' in os.environ:
+    #     exp_name += f'p_{os.environ["SLURM_PROCID"]}.'
+    # exp_name += f'{datetime.now().strftime("%Y%m%d_%H%M%S")}'
+
+    # return exp_name
 
 
 def setup_wandb(
@@ -56,7 +86,8 @@ def setup_wandb(
     group=None,
     name=None,
     mode='online',
-    config=None
+    config=None,
+    run_name=None,
 ):
     """Set up Weights & Biases for logging."""
     wandb_output_dir = tempfile.mkdtemp()
