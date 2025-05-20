@@ -163,8 +163,8 @@ class HIQLAgent(flax.struct.PyTreeNode):
         # # goal_reps = high_dist.sample(seed=high_seed)
         # # goal_reps = goal_reps / jnp.linalg.norm(goal_reps, axis=-1, keepdims=True) * jnp.sqrt(goal_reps.shape[-1])
         if finetuning:
-            high_dist = self.network.select('high_actor')(batch['observations'], batch['high_actor_goals'])
-            goal_reps = high_dist.sample(seed=new_rng)
+            high_dist = self.network.select('high_actor')(batch['observations'], batch['high_actor_goals']) # no temperature selection for now
+            goal_reps = high_dist.sample(seed=new_rng) 
             goal_reps = goal_reps / jnp.linalg.norm(goal_reps, axis=-1, keepdims=True) * jnp.sqrt(goal_reps.shape[-1])
             batch = batch.replace(low_actor_goals=goal_reps)
 
