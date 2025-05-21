@@ -83,7 +83,7 @@ def extract_cube_positions_from_full_obs(observation_array, proprio_dim, num_cub
         return np.concatenate(positions_list, axis=-1)
 
 
-def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist=None):
+def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist=None, start_to_state_dist=None):
     _obs = dataset['observations']
     ep_id = dataset['terminals'].cumsum() // 2
     ep_id[1:] = ep_id[:-1]
@@ -137,6 +137,9 @@ def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to
     else: # Original maze logic
         # obs is 1D, _obs_reshaped is (num_episodes, ep_len, feature_dim)
         start_matches = jnp.sqrt(jnp.sum((_obs[..., :2] - obs[:2])**2, axis=-1)) < start_threshold
+        if finetune_kwargs['relevance_by_value']:
+            assert start_to_state_dist is not None, 'Distance from current obs to all states is needed.'
+            start_matches = start_to_state_dist < start_threshold
         if non_relevance:
             # If non-relevance is enabled, we sample transitions from the buffer that are good under the optimality criterion but may be from anywhere over the state space (not necessarily close to our agent's state)
             start_matches = jnp.sqrt(jnp.sum((_obs[..., :2] - obs[:2])**2, axis=-1)) < 10000.0
@@ -631,18 +634,25 @@ class GCDataset:
 
         elif finetune_kwargs.get('filter_by_recursive_mdp', False):
             _values = []
+            _start_values = []
             batch_size=10000
             for i in range((len(_obs) // batch_size) + 1):
                 _sli, _ce = i*batch_size, min((i+1)*batch_size, len(_obs))
                 if not is_hiql:
                     _values.append(agent.network.select('value')(_obs[_sli:_ce], goal.reshape(1, -1).repeat(_ce - _sli, 0)))
+                    _start_values.append(agent.network.select('value')(_obs[_sli:_ce], obs.reshape(1, -1).repeat(_ce - _sli, 0)))
                 else:
                     (v1,v2) = agent.network.select('value')(_obs[_sli:_ce], goal.reshape(1, -1).repeat(_ce - _sli, 0))
                     _values.append((v1+v2)/2)
                     del v1, v2
+                    (sv1,sv2) = agent.network.select('value')(_obs[_sli:_ce], obs.reshape(1, -1).repeat(_ce - _sli, 0))
+                    _start_values.append((sv1+sv2)/2)
+                    del sv1, sv2
             _values = jnp.concatenate(_values, 0)
             state_to_goal_dist = (jnp.log((_values/(1/(1 - 0.99)) + 1)) / jnp.log(0.99))
-            td_filter = filter_by_recursive_mdp(self.dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist)
+            _start_values = jnp.concatenate(_start_values, 0)
+            start_to_state_dist = (jnp.log((_start_values/(1/(1 - 0.99)) + 1)) / jnp.log(0.99))
+            td_filter = filter_by_recursive_mdp(self.dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist, start_to_state_dist)
             _filter = _filter * td_filter 
 
         
