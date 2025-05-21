@@ -139,7 +139,7 @@ def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to
         start_matches = jnp.sqrt(jnp.sum((_obs[..., :2] - obs[:2])**2, axis=-1)) < start_threshold
         if finetune_kwargs['relevance_by_value']:
             assert start_to_state_dist is not None, 'Distance from current obs to all states is needed.'
-            start_matches = start_to_state_dist < start_threshold
+            start_matches = (start_to_state_dist < start_threshold).reshape(start_matches.shape)
         if non_relevance:
             # If non-relevance is enabled, we sample transitions from the buffer that are good under the optimality criterion but may be from anywhere over the state space (not necessarily close to our agent's state)
             start_matches = jnp.sqrt(jnp.sum((_obs[..., :2] - obs[:2])**2, axis=-1)) < 10000.0
