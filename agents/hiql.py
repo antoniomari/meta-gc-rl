@@ -9,7 +9,7 @@ import optax
 from utils.encoders import GCEncoder, encoder_modules
 from utils.flax_utils import ModuleDict, TrainState, nonpytree_field
 from utils.networks import MLP, GCActor, GCDiscreteActor, GCValue, Identity, LengthNormalize
-
+from functools import partial # Import partial
 
 class HIQLAgent(flax.struct.PyTreeNode):
     """Hierarchical implicit Q-learning (HIQL) agent."""
@@ -68,11 +68,16 @@ class HIQLAgent(flax.struct.PyTreeNode):
         exp_a = jnp.exp(adv * self.config['low_alpha'])
         exp_a = jnp.minimum(exp_a, 100.0)
 
-        # Compute the goal representations of the subgoals.
-        goal_reps = self.network.select('goal_rep')(
-            jnp.concatenate([batch['observations'], batch['low_actor_goals']], axis=-1),
-            params=grad_params,
-        )
+        if 'low_actor_goal_reps_finetune' in batch: # This check is fine if 'finetuning' is static for update
+            goal_reps = batch['low_actor_goal_reps_finetune']
+            # The stop_gradient was moved to the `update` method, which is cleaner.
+        else: 
+            # Compute the goal representations of the subgoals.
+            goal_reps = self.network.select('goal_rep')(
+                jnp.concatenate([batch['observations'], batch['low_actor_goals']], axis=-1),
+                params=grad_params,
+            )
+
         if not self.config['low_actor_rep_grad']:
             # Stop gradients through the goal representations.
             goal_reps = jax.lax.stop_gradient(goal_reps)
@@ -152,8 +157,8 @@ class HIQLAgent(flax.struct.PyTreeNode):
         )
         network.params[f'modules_target_{module_name}'] = new_target_params
 
-    @jax.jit
-    def update(self, batch, finetuning=False):
+    @partial(jax.jit, static_argnames=('finetuning',))
+    def update(self, batch,  finetuning: bool = False):
         """Update the agent and return a new agent with information dictionary."""
         new_rng, rng = jax.random.split(self.rng)
 
@@ -162,14 +167,26 @@ class HIQLAgent(flax.struct.PyTreeNode):
         # # high_dist = self.network.select('high_actor')(observations, goals, temperature=temperature)
         # # goal_reps = high_dist.sample(seed=high_seed)
         # # goal_reps = goal_reps / jnp.linalg.norm(goal_reps, axis=-1, keepdims=True) * jnp.sqrt(goal_reps.shape[-1])
+        #rng_for_next_state, rng_for_sample, rng_for_loss = jax.random.split(self.rng, 3)
+    
+        batch_for_loss = batch # Start with the original batch
         if finetuning:
-            high_dist = self.network.select('high_actor')(batch['observations'], batch['high_actor_goals']) # no temperature selection for now
+            high_dist = self.network.select('high_actor')(batch['observations'], batch['high_actor_goals'])
             goal_reps = high_dist.sample(seed=new_rng) 
             goal_reps = goal_reps / jnp.linalg.norm(goal_reps, axis=-1, keepdims=True) * jnp.sqrt(goal_reps.shape[-1])
-            batch = batch.replace(low_actor_goals=goal_reps)
+            
+            # Make batch mutable to add the new key
+            mutable_batch = batch.unfreeze() # Assumes batch is always a FrozenDict here
+            mutable_batch['low_actor_goal_reps_finetune'] = goal_reps
+            
+            # It's good practice to stop gradient -> This is done under low_actor_loss
+            # to train the high_actor. High_actor has its own loss.
+            # mutable_batch['low_actor_goal_reps_finetune'] = jax.lax.stop_gradient(mutable_batch['low_actor_goal_reps_finetune'])
+            
+            batch_for_loss = flax.core.FrozenDict(mutable_batch)
 
         def loss_fn(grad_params):
-            return self.total_loss(batch, grad_params, rng=rng)
+            return self.total_loss(batch_for_loss, grad_params, rng=rng)
 
         new_network, info = self.network.apply_loss_fn(loss_fn=loss_fn)
         self.target_update(new_network, 'value')

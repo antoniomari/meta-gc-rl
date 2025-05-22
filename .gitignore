@@ -6,3 +6,11 @@ dist/
 .DS_Store
 .idea/
 .ruff_cache/
+
+# Ignore directories
+configs/
+logs/
+scripts/
+
+# Ignore specific files
+create.py

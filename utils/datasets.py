@@ -606,6 +606,8 @@ class GCDataset:
             
             # we need to set high actor goals to goal
             active_batch['high_actor_goals'][idxs] = goal 
+            active_batch['high_actor_targets'][idxs] = goal
+            active_batch['value_goals'][idxs] = goal
             # then set low actor goals to the ones selected by the agent
             
 

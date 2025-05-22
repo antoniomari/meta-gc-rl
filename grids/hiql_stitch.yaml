@@ -1,0 +1,55 @@
+name:  &job_name hiql-stitch
+results_dir: /fast/malbaba/results/offline_finetuning
+git_branch: main
+git_commit: null
+script_path: main.py
+pre_script: null
+cluster_requirements:
+  cpus: 8
+  ram: 32G
+  gpus: 1
+  disk: 32G
+  bid: 25
+  forbidden_hostnames: ['g054']
+  time: 24:00:00
+default_params: default.yaml
+grid:
+  run_group: *job_name
+  train_steps: 500000
+  eval_interval: 50000
+  eval_start: 50000
+  log_interval: 5000
+  save_interval: 50000
+  eval_on_cpu: 0
+  eval_episodes: 5
+
+  '[env_name, agent.agent_name, agent.actor_loss, finetune.actor_loss, agent.alpha, agent.actor_p_randomgoal, agent.actor_p_trajgoal, agent.discount, agent.subgoal_steps, finetune.cube_env]': [
+    [pointmaze-medium-stitch-v0, hiql, awr, awr, 0.003, 0.5, 0.5, 0.99, 25, False],
+    [antmaze-medium-stitch-v0, hiql, awr, awr, 0.3, 0.5, 0.5, 0.99, 25, False],
+    [humanoidmaze-medium-stitch-v0, hiql, awr, awr, 0.1, 0.5, 0.5, 0.995, 100, False],
+    [cube-double-play-v0, hiql, awr, awr, 1.0, 0.0, 1.0, 0.99, 10, True],
+  ]
+  agent.high_alpha: 3.0
+  agent.low_alpha: 3.0
+  
+  finetune.lr: 3.e-4
+  finetune.ratio: 1.0
+  finetune.fix_actor_goal: 1.0
+  finetune.filter_by_td: false
+  finetune.mc_quantile: 0.2
+  finetune.mc_slack: 10 # might change this to 5
+  finetune.sorb_len: 5
+  finetune.td_correction_horizon: 20
+  finetune.td_quantile: 0.2
+  finetune.filter_by_argmax: false
+  finetune.filter_by_nstep_td: false
+  finetune.max_steps: 15
+
+  '[finetune.num_steps, finetune.filter_by_mc, finetune.filter_by_recursive_mdp, finetune.min_steps, finetune.replan_horizon, finetune.mc_similarity_threshold]': [
+    [100, false, true, 10, 100, 1.0],
+    [100, true, false, 10, 100, 1.0],
+    [0, false, false, 10, 100, 1.0],
+  ]
+
+  seed: [0, 1, 2]
+

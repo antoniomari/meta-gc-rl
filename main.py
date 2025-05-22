@@ -37,7 +37,7 @@ def main(cfg):
     # set wandb_env_name as the first part and second part of env_name_split
     wandb_env_name = env_name_split[0] + '-' + env_name_split[2]
     exp_name = get_exp_name(cfg)
-    setup_wandb(project='TTT', group=cfg.run_group, name=exp_name, config=cfg.to_dict())
+    setup_wandb(project='TTT_Appendix', group=cfg.run_group, name=exp_name, config=cfg.to_dict())
 
     os.makedirs(cfg.working_dir, exist_ok=True)
     with open(os.path.join(cfg.working_dir, 'config.yaml'), 'w') as f:
