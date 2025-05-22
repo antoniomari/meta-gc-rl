@@ -17,7 +17,7 @@ grid:
   run_group: *job_name
   train_steps: 500000
   eval_interval: 50000
-  eval_start: 50000
+  eval_start: 45000
   log_interval: 5000
   save_interval: 50000
   eval_on_cpu: 0
@@ -47,8 +47,8 @@ grid:
 
   '[finetune.num_steps, finetune.filter_by_mc, finetune.filter_by_recursive_mdp, finetune.min_steps, finetune.replan_horizon, finetune.mc_similarity_threshold]': [
     [100, false, true, 10, 100, 1.0],
-    [100, true, false, 10, 100, 1.0],
-    [0, false, false, 10, 100, 1.0],
+    #[100, true, false, 10, 100, 1.0],
+    #[0, false, false, 10, 100, 1.0],
   ]
 
   seed: [0, 1, 2]

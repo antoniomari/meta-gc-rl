@@ -176,14 +176,12 @@ class HIQLAgent(flax.struct.PyTreeNode):
             goal_reps = goal_reps / jnp.linalg.norm(goal_reps, axis=-1, keepdims=True) * jnp.sqrt(goal_reps.shape[-1])
             
             # Make batch mutable to add the new key
-            mutable_batch = batch.unfreeze() # Assumes batch is always a FrozenDict here
+            mutable_batch = dict(batch) # Create a shallow copy
             mutable_batch['low_actor_goal_reps_finetune'] = goal_reps
-            
+            batch_for_loss = mutable_batch
             # It's good practice to stop gradient -> This is done under low_actor_loss
             # to train the high_actor. High_actor has its own loss.
             # mutable_batch['low_actor_goal_reps_finetune'] = jax.lax.stop_gradient(mutable_batch['low_actor_goal_reps_finetune'])
-            
-            batch_for_loss = flax.core.FrozenDict(mutable_batch)
 
         def loss_fn(grad_params):
             return self.total_loss(batch_for_loss, grad_params, rng=rng)
