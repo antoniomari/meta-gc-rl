@@ -69,43 +69,25 @@ def evaluate(
     """
     trajs = []
     stats = defaultdict(list)
-    # check if agent.agent_name in config is hiql
-    agent_name = config.get('agent_name', None)
-    is_hiql = (agent_name == 'hiql')
 
     renders = []
     for i in trange(num_eval_episodes + num_video_episodes):
         traj = defaultdict(list)
         should_render = i >= num_eval_episodes
-
+        
         observation, info = env.reset(options=dict(task_id=task_id, render_goal=should_render))
         goal = info.get('goal')
         goal_frame = info.get('goal_rendered')
-        # Simple script to plot critic and policy output in a 2D environment
 
-        _batch = train_dataset.sample(10000)
+        # Simple script to plot critic and policy output in a 2D environment
+        # We sample a batch from the training dataset, then calculate both values and actions on sampled batch
         import numpy as np
         def make_plots(suffix):
             import matplotlib.pyplot as plt
             _batch = train_dataset.sample(10000)
             _obs = _batch['observations']
-        #     print(values[:3])
-            if is_hiql:
-                # We need to sample from the high-level policy and then the low-level policy, below is sample code
-                # Sample from the high-level policy
-                (values_1, values_2) = agent.network.select('value')(_obs, goal.reshape(1, -1).repeat(10000, 0))
-                # v = (v1 + v2) / 2
-                values = (values_1 + values_2) / 2
-                high_dist = agent.network.select('high_actor')(_obs, goal.reshape(1, -1).repeat(10000, 0))
-                goal_reps = high_dist.sample(seed=jax.random.PRNGKey(np.random.randint(0, 2**32)))
-                goal_reps = goal_reps / np.linalg.norm(goal_reps, axis=-1, keepdims=True) * np.sqrt(goal_reps.shape[-1])
-                # Sample from the low-level policy
-                actions = agent.network.select('low_actor')(_obs, goal_reps, goal_encoded=True).mean()
-            else:
-                values = agent.network.select('value')(_obs, goal.reshape(1, -1).repeat(10000, 0))
-                actions = agent.network.select('actor')(_obs, goal.reshape(1, -1).repeat(10000, 0)).mean()
-        #     print(actions[:3])
-        #     print(values[8350] - values[8300])
+            values = agent.network.select('value')(_obs, goal.reshape(1, -1).repeat(10000, 0))
+            actions = agent.network.select('actor')(_obs, goal.reshape(1, -1).repeat(10000, 0)).mean()
             import io
             import wandb
             from PIL import Image
@@ -113,7 +95,6 @@ def evaluate(
             try:
                 buf = io.BytesIO()
                 plt.scatter(_obs[:, 0], _obs[:, 1], c=values)
-                #plt.savefig(f'Zvalues_{suffix}_{exp_name}.png')
                 plt.savefig(buf, format='png', dpi=200)
                 plt.close()
                 buf.seek(0)
@@ -126,7 +107,6 @@ def evaluate(
             try:
                 buf = io.BytesIO()
                 plt.quiver(_obs[:, 0], _obs[:, 1], actions[:, 0], actions[:, 1], angles='xy', scale_units='xy', scale=2)
-                #plt.savefig(f'Zactions_{suffix}_{exp_name}.png', dpi=900)
                 plt.savefig(buf, format='png', dpi=200)
                 plt.close()
                 buf.seek(0)
@@ -135,13 +115,16 @@ def evaluate(
             except Exception as e:
                 print(f"Error logging Zactions_{suffix}: {e}")
                 plt.close()
-            #wandb.log({f'Zactions_{suffix}': wandb.Image(buf)})
-            
+        
+        # Plotting values and actions before fine-tuning
         make_plots('pre')
 
         finetune_stats = defaultdict(list)
         recursive_mdp = finetune_config.get('filter_by_recursive_mdp', False)
         aggregated_filters = []  
+
+        # Default GC-TTT (with critic)
+        # - recursive_mdp = True
         if recursive_mdp:
             done = False
             step = 0
@@ -160,9 +143,9 @@ def evaluate(
                 
                 old_config = agent.config
                 new_config = agent.config.unfreeze()
-                if finetune_config.actor_loss is not None and not is_hiql:
+                if finetune_config.actor_loss is not None:
                     new_config['actor_loss'] = finetune_config.actor_loss
-                if finetune_config.alpha is not None and not is_hiql:
+                if finetune_config.alpha is not None:
                     new_config['alpha'] = finetune_config.alpha
                 new_config = old_config.__class__(new_config)
                 old_train_state = copy.deepcopy(agent.network)
@@ -174,9 +157,7 @@ def evaluate(
                 if hasattr(finetune_config, 'unfreeze'):
                     current_finetune_config = finetune_config.unfreeze()
                 else:
-                    # If it's a standard dictionary, create a copy to modify
                     current_finetune_config = dict(finetune_config)
-
                 cube_env = current_finetune_config.get('cube_env', False)
                 if cube_env: # A way to detect CubeEnv, or use env.spec.id
                     # env._num_cubes should be available if 'env' is an instance of your CubeEnv
@@ -184,29 +165,30 @@ def evaluate(
                     current_finetune_config['num_cubes'] = num_cubes
                     # The 9 elements per cube state: 3 (pos) + 4 (quat) + 2 (sin/cos yaw)
                     current_finetune_config['proprio_dim'] = env.observation_space.shape[0] - num_cubes * 9
-
-                # If finetune_config was unfrozen, you might need to freeze it again or use the unfrozen version
-                # For example, if the original was a frozen ConfigDict:
-                # finetune_config_to_pass = config_dict.ConfigDict(current_finetune_config)
-                # For simplicity, assuming current_finetune_config can be passed directly:
                 finetune_config_to_pass = current_finetune_config
+
+                # Filtering the dataset for active test-time fine-tuning.
                 _filter = train_dataset.prepare_active_sample(agent, observation, goal, finetune_config_to_pass, exp_name=exp_name,
-                                                              log_filter=False, is_hiql=is_hiql)
+                                                              log_filter=False)
                 aggregated_filters.append(_filter)
                 if _filter.sum() > 0:
                     for _ in range(finetune_config.num_steps):
+                        # Sample a batch from the dataset using the filter.
+                        # The batch will contain only the samples that match the filter.
                         batch = train_dataset.active_sample(
                             finetune_config.batch_size,
                             _filter,
                             goal,
                             finetune_config.ratio,
                             finetune_config.fix_actor_goal,
-                            is_hiql = is_hiql
+                            finetune_kwargs=finetune_config_to_pass
                         )
+                        # Update the agent with the sampled batch.
                         agent, update_info = agent.update(batch, finetuning=True)
                         add_to(finetune_stats, flatten(update_info))
                 
                 actor_fn = supply_rng(agent.sample_actions, rng=jax.random.PRNGKey(np.random.randint(0, 2**32)))
+                
                 # Execute the policy for a fixed short horizon before replanning.
                 for _ in range(replan_horizon):
                     if done:
@@ -253,6 +235,7 @@ def evaluate(
                     numberofallfiltered += np.count_nonzero(f)
                 import wandb
                 wandb.log({'Z_NumberOfFineTunePoints': numberofallfiltered})
+
                 # Now log the aggregated filter.
                 import matplotlib.pyplot as plt
                 import io
@@ -280,16 +263,19 @@ def evaluate(
                 renders.append(np.array(render))
             make_plots('post')
 
+        # GC-TTT without critic
         else:
             # Prepare fine-tuning
             old_config = agent.config
             new_config = agent.config.unfreeze()
+
             # Override training parameters
-            if finetune_config.actor_loss is not None and not is_hiql:
+            if finetune_config.actor_loss is not None:
                 new_config['actor_loss'] = finetune_config.actor_loss
-            if finetune_config.alpha is not None and not is_hiql:
+            if finetune_config.alpha is not None:
                 new_config['alpha'] = finetune_config.alpha
             new_config = old_config.__class__(new_config)
+            
             # Copy parameters and state
             old_train_state = copy.deepcopy(agent.network)
             opt_state = agent.network.opt_state
@@ -298,15 +284,13 @@ def evaluate(
             agent = agent.replace(network=agent.network.replace(tx=finetune_tx, opt_state=opt_state), config=new_config)
 
             if finetune_config.num_steps:
-                # Default fine tuning aspect
 
                 # _filter is a binary mask over the entire dataset
                 if hasattr(finetune_config, 'unfreeze'):
                     current_finetune_config = finetune_config.unfreeze()
                 else:
-                    # If it's a standard dictionary, create a copy to modify
                     current_finetune_config = dict(finetune_config)
-
+                
                 cube_env = current_finetune_config.get('cube_env', False)
                 if cube_env: # A way to detect CubeEnv, or use env.spec.id
                     # env._num_cubes should be available if 'env' is an instance of your CubeEnv
@@ -319,24 +303,26 @@ def evaluate(
                     except Exception as e:
                         #print(f"Error accessing _use_oracle_rep: {e}")
                         current_finetune_config['goal_is_oracle_rep'] = False
-                
-                
-                # If finetune_config was unfrozen, you might need to freeze it again or use the unfrozen version
-                # For example, if the original was a frozen ConfigDict:
-                # finetune_config_to_pass = config_dict.ConfigDict(current_finetune_config)
-                # For simplicity, assuming current_finetune_config can be passed directly:
+
                 finetune_config_to_pass = current_finetune_config
-                _filter = train_dataset.prepare_active_sample(agent, observation, goal, finetune_config_to_pass, exp_name=exp_name, is_hiql=is_hiql)
+                _filter = train_dataset.prepare_active_sample(agent, observation, goal, finetune_config_to_pass, exp_name=exp_name)
                 # Skip fine-tuning if the filter would select nothing
                 num_steps = finetune_config.num_steps if _filter.sum() else 0
                 for _ in range(num_steps):
-                    batch = train_dataset.active_sample(finetune_config.batch_size, _filter, goal, finetune_config.ratio, finetune_config.fix_actor_goal, is_hiql=is_hiql)
+                    # Sample a batch from the dataset using the filter.
+                    # The batch will contain only the samples that match the filter.
+                    batch = train_dataset.active_sample(finetune_config.batch_size, 
+                                                        _filter, goal,
+                                                        finetune_config.ratio, 
+                                                        finetune_config.fix_actor_goal, 
+                                                        finetune_kwargs=finetune_config_to_pass)
+                    # Update the agent with the sampled batch.
                     agent, info = agent.update(batch, finetuning=True)
-                    #print('finetune', info)
                     add_to(finetune_stats, flatten(info))
 
-            #print('finetune_stats', finetune_stats)
+            # Plotting values and actions after fine-tuning
             make_plots('post')
+
             actor_fn = supply_rng(agent.sample_actions, rng=jax.random.PRNGKey(np.random.randint(0, 2**32)))
 
             done = False
