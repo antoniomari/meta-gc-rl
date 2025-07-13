@@ -1,0 +1,3593 @@
+Analysis Report for Project: rlforimitation/TTT_AllFinalRuns
+Metric: evaluation/overall_success
+
+
+################################################################################
+### Environment: antmaze-medium-navigate-v0
+################################################################################
+
+================================================================================
+===== Category: GCIQL - AWR =====
+================================================================================
+
+--- Rank #1 in Category ---
+Score (Mean ± Std Dev): 0.7407 ± 0.0559
+Standard Error: 0.0323
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #2 in Category ---
+Score (Mean ± Std Dev): 0.7185 ± 0.0463
+Standard Error: 0.0267
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #3 in Category ---
+Score (Mean ± Std Dev): 0.7111 ± 0.0801
+Standard Error: 0.0463
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #4 in Category ---
+Score (Mean ± Std Dev): 0.7111 ± 0.1018
+Standard Error: 0.0588
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #5 in Category ---
+Score (Mean ± Std Dev): 0.6963 ± 0.1224
+Standard Error: 0.0707
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #6 in Category ---
+Score (Mean ± Std Dev): 0.6741 ± 0.0559
+Standard Error: 0.0323
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #7 in Category ---
+Score (Mean ± Std Dev): 0.6741 ± 0.0559
+Standard Error: 0.0323
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #8 in Category ---
+Score (Mean ± Std Dev): 0.6667 ± 0.0444
+Standard Error: 0.0257
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #9 in Category ---
+Score (Mean ± Std Dev): 0.6519 ± 0.1683
+Standard Error: 0.0971
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #10 in Category ---
+Score (Mean ± Std Dev): 0.6519 ± 0.1513
+Standard Error: 0.0873
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #11 in Category ---
+Score (Mean ± Std Dev): 0.6519 ± 0.1358
+Standard Error: 0.0784
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #12 in Category ---
+Score (Mean ± Std Dev): 0.6519 ± 0.0898
+Standard Error: 0.0519
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #13 in Category ---
+Score (Mean ± Std Dev): 0.6519 ± 0.0463
+Standard Error: 0.0267
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #14 in Category ---
+Score (Mean ± Std Dev): 0.6370 ± 0.0559
+Standard Error: 0.0323
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #15 in Category ---
+Score (Mean ± Std Dev): 0.6296 ± 0.1026
+Standard Error: 0.0593
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #16 in Category ---
+Score (Mean ± Std Dev): 0.6222 ± 0.0444
+Standard Error: 0.0257
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #17 in Category ---
+Score (Mean ± Std Dev): 0.6148 ± 0.0780
+Standard Error: 0.0451
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #18 in Category ---
+Score (Mean ± Std Dev): 0.6148 ± 0.0679
+Standard Error: 0.0392
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #19 in Category ---
+Score (Mean ± Std Dev): 0.6074 ± 0.0841
+Standard Error: 0.0486
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #20 in Category ---
+Score (Mean ± Std Dev): 0.6074 ± 0.1411
+Standard Error: 0.0815
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #21 in Category ---
+Score (Mean ± Std Dev): 0.6000 ± 0.0889
+Standard Error: 0.0513
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #22 in Category ---
+Score (Mean ± Std Dev): 0.5926 ± 0.0128
+Standard Error: 0.0074
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #23 in Category ---
+Score (Mean ± Std Dev): 0.5852 ± 0.1096
+Standard Error: 0.0633
+Configuration (3 seeds):
+  - finetune.lr: 0
+  - finetune.num_steps: 0
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #24 in Category ---
+Score (Mean ± Std Dev): 0.5630 ± 0.0898
+Standard Error: 0.0519
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #25 in Category ---
+Score (Mean ± Std Dev): 0.5556 ± 0.0588
+Standard Error: 0.0339
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+================================================================================
+===== Category: GCIQL - DDPGBC =====
+================================================================================
+
+--- Rank #1 in Category ---
+Score (Mean ± Std Dev): 0.8667 ± 0.0588
+Standard Error: 0.0339
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #2 in Category ---
+Score (Mean ± Std Dev): 0.8519 ± 0.0257
+Standard Error: 0.0148
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #3 in Category ---
+Score (Mean ± Std Dev): 0.8444 ± 0.0000
+Standard Error: 0.0000
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #4 in Category ---
+Score (Mean ± Std Dev): 0.8222 ± 0.0801
+Standard Error: 0.0463
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #5 in Category ---
+Score (Mean ± Std Dev): 0.8148 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #6 in Category ---
+Score (Mean ± Std Dev): 0.8000 ± 0.0801
+Standard Error: 0.0463
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #7 in Category ---
+Score (Mean ± Std Dev): 0.8000 ± 0.0801
+Standard Error: 0.0463
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #8 in Category ---
+Score (Mean ± Std Dev): 0.8000 ± 0.0444
+Standard Error: 0.0257
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #9 in Category ---
+Score (Mean ± Std Dev): 0.8000 ± 0.0222
+Standard Error: 0.0128
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #10 in Category ---
+Score (Mean ± Std Dev): 0.7852 ± 0.0559
+Standard Error: 0.0323
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #11 in Category ---
+Score (Mean ± Std Dev): 0.7778 ± 0.1556
+Standard Error: 0.0898
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #12 in Category ---
+Score (Mean ± Std Dev): 0.7778 ± 0.0444
+Standard Error: 0.0257
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #13 in Category ---
+Score (Mean ± Std Dev): 0.7704 ± 0.0679
+Standard Error: 0.0392
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #14 in Category ---
+Score (Mean ± Std Dev): 0.7704 ± 0.1140
+Standard Error: 0.0658
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #15 in Category ---
+Score (Mean ± Std Dev): 0.7630 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #16 in Category ---
+Score (Mean ± Std Dev): 0.7556 ± 0.0444
+Standard Error: 0.0257
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #17 in Category ---
+Score (Mean ± Std Dev): 0.7556 ± 0.0385
+Standard Error: 0.0222
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #18 in Category ---
+Score (Mean ± Std Dev): 0.7481 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #19 in Category ---
+Score (Mean ± Std Dev): 0.7481 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #20 in Category ---
+Score (Mean ± Std Dev): 0.7481 ± 0.0257
+Standard Error: 0.0148
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #21 in Category ---
+Score (Mean ± Std Dev): 0.7407 ± 0.0679
+Standard Error: 0.0392
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #22 in Category ---
+Score (Mean ± Std Dev): 0.7185 ± 0.1283
+Standard Error: 0.0741
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #23 in Category ---
+Score (Mean ± Std Dev): 0.6815 ± 0.0559
+Standard Error: 0.0323
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #24 in Category ---
+Score (Mean ± Std Dev): 0.6815 ± 0.0841
+Standard Error: 0.0486
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #25 in Category ---
+Score (Mean ± Std Dev): 0.6519 ± 0.1513
+Standard Error: 0.0873
+Configuration (3 seeds):
+  - finetune.lr: 0
+  - finetune.num_steps: 0
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+
+################################################################################
+### Environment: antmaze-medium-stitch-v0
+################################################################################
+
+================================================================================
+===== Category: GCIQL - AWR =====
+================================================================================
+
+--- Rank #1 in Category ---
+Score (Mean ± Std Dev): 0.6593 ± 0.0841
+Standard Error: 0.0486
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #2 in Category ---
+Score (Mean ± Std Dev): 0.6519 ± 0.0898
+Standard Error: 0.0519
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #3 in Category ---
+Score (Mean ± Std Dev): 0.6444 ± 0.0770
+Standard Error: 0.0444
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #4 in Category ---
+Score (Mean ± Std Dev): 0.6296 ± 0.0463
+Standard Error: 0.0267
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #5 in Category ---
+Score (Mean ± Std Dev): 0.6222 ± 0.0588
+Standard Error: 0.0339
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #6 in Category ---
+Score (Mean ± Std Dev): 0.6000 ± 0.0667
+Standard Error: 0.0385
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #7 in Category ---
+Score (Mean ± Std Dev): 0.5926 ± 0.0463
+Standard Error: 0.0267
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #8 in Category ---
+Score (Mean ± Std Dev): 0.5926 ± 0.0898
+Standard Error: 0.0519
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #9 in Category ---
+Score (Mean ± Std Dev): 0.5630 ± 0.0128
+Standard Error: 0.0074
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #10 in Category ---
+Score (Mean ± Std Dev): 0.5556 ± 0.0222
+Standard Error: 0.0128
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #11 in Category ---
+Score (Mean ± Std Dev): 0.5333 ± 0.0969
+Standard Error: 0.0559
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #12 in Category ---
+Score (Mean ± Std Dev): 0.4667 ± 0.0588
+Standard Error: 0.0339
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #13 in Category ---
+Score (Mean ± Std Dev): 0.2963 ± 0.0463
+Standard Error: 0.0267
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #14 in Category ---
+Score (Mean ± Std Dev): 0.2741 ± 0.0513
+Standard Error: 0.0296
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #15 in Category ---
+Score (Mean ± Std Dev): 0.2741 ± 0.0513
+Standard Error: 0.0296
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #16 in Category ---
+Score (Mean ± Std Dev): 0.2741 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #17 in Category ---
+Score (Mean ± Std Dev): 0.2741 ± 0.0559
+Standard Error: 0.0323
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #18 in Category ---
+Score (Mean ± Std Dev): 0.2667 ± 0.0969
+Standard Error: 0.0559
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #19 in Category ---
+Score (Mean ± Std Dev): 0.2667 ± 0.0969
+Standard Error: 0.0559
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #20 in Category ---
+Score (Mean ± Std Dev): 0.2667 ± 0.0588
+Standard Error: 0.0339
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #21 in Category ---
+Score (Mean ± Std Dev): 0.2667 ± 0.0969
+Standard Error: 0.0559
+Configuration (3 seeds):
+  - finetune.lr: 0
+  - finetune.num_steps: 0
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #22 in Category ---
+Score (Mean ± Std Dev): 0.2519 ± 0.0714
+Standard Error: 0.0412
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #23 in Category ---
+Score (Mean ± Std Dev): 0.2519 ± 0.0128
+Standard Error: 0.0074
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #24 in Category ---
+Score (Mean ± Std Dev): 0.2519 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #25 in Category ---
+Score (Mean ± Std Dev): 0.2222 ± 0.0588
+Standard Error: 0.0339
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+================================================================================
+===== Category: GCIQL - DDPGBC =====
+================================================================================
+
+--- Rank #1 in Category ---
+Score (Mean ± Std Dev): 0.7333 ± 0.1111
+Standard Error: 0.0642
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #2 in Category ---
+Score (Mean ± Std Dev): 0.7259 ± 0.0559
+Standard Error: 0.0323
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #3 in Category ---
+Score (Mean ± Std Dev): 0.7111 ± 0.0588
+Standard Error: 0.0339
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #4 in Category ---
+Score (Mean ± Std Dev): 0.6741 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #5 in Category ---
+Score (Mean ± Std Dev): 0.6222 ± 0.0801
+Standard Error: 0.0463
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #6 in Category ---
+Score (Mean ± Std Dev): 0.6222 ± 0.0385
+Standard Error: 0.0222
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #7 in Category ---
+Score (Mean ± Std Dev): 0.6148 ± 0.0714
+Standard Error: 0.0412
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #8 in Category ---
+Score (Mean ± Std Dev): 0.6074 ± 0.0780
+Standard Error: 0.0451
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #9 in Category ---
+Score (Mean ± Std Dev): 0.5926 ± 0.0780
+Standard Error: 0.0451
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #10 in Category ---
+Score (Mean ± Std Dev): 0.5704 ± 0.1513
+Standard Error: 0.0873
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #11 in Category ---
+Score (Mean ± Std Dev): 0.5556 ± 0.0588
+Standard Error: 0.0339
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #12 in Category ---
+Score (Mean ± Std Dev): 0.5407 ± 0.0679
+Standard Error: 0.0392
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #13 in Category ---
+Score (Mean ± Std Dev): 0.3630 ± 0.2334
+Standard Error: 0.1348
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #14 in Category ---
+Score (Mean ± Std Dev): 0.3407 ± 0.2270
+Standard Error: 0.1311
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #15 in Category ---
+Score (Mean ± Std Dev): 0.3259 ± 0.2438
+Standard Error: 0.1407
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #16 in Category ---
+Score (Mean ± Std Dev): 0.2593 ± 0.0898
+Standard Error: 0.0519
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #17 in Category ---
+Score (Mean ± Std Dev): 0.2593 ± 0.0898
+Standard Error: 0.0519
+Configuration (3 seeds):
+  - finetune.lr: 0
+  - finetune.num_steps: 0
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #18 in Category ---
+Score (Mean ± Std Dev): 0.2593 ± 0.0898
+Standard Error: 0.0519
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #19 in Category ---
+Score (Mean ± Std Dev): 0.2593 ± 0.0257
+Standard Error: 0.0148
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #20 in Category ---
+Score (Mean ± Std Dev): 0.2593 ± 0.0898
+Standard Error: 0.0519
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #21 in Category ---
+Score (Mean ± Std Dev): 0.2593 ± 0.0898
+Standard Error: 0.0519
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #22 in Category ---
+Score (Mean ± Std Dev): 0.2593 ± 0.0898
+Standard Error: 0.0519
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #23 in Category ---
+Score (Mean ± Std Dev): 0.2593 ± 0.0898
+Standard Error: 0.0519
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #24 in Category ---
+Score (Mean ± Std Dev): 0.2444 ± 0.1111
+Standard Error: 0.0642
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #25 in Category ---
+Score (Mean ± Std Dev): 0.2444 ± 0.0588
+Standard Error: 0.0339
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+
+################################################################################
+### Environment: cube-single-play-v0
+################################################################################
+
+================================================================================
+===== Category: GCIQL - AWR =====
+================================================================================
+
+--- Rank #1 in Category ---
+Score (Mean ± Std Dev): 0.6815 ± 0.0898
+Standard Error: 0.0519
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #2 in Category ---
+Score (Mean ± Std Dev): 0.6519 ± 0.1002
+Standard Error: 0.0579
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #3 in Category ---
+Score (Mean ± Std Dev): 0.6444 ± 0.0801
+Standard Error: 0.0463
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #4 in Category ---
+Score (Mean ± Std Dev): 0.6444 ± 0.1333
+Standard Error: 0.0770
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #5 in Category ---
+Score (Mean ± Std Dev): 0.6296 ± 0.1050
+Standard Error: 0.0606
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #6 in Category ---
+Score (Mean ± Std Dev): 0.6148 ± 0.0925
+Standard Error: 0.0534
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #7 in Category ---
+Score (Mean ± Std Dev): 0.6000 ± 0.0969
+Standard Error: 0.0559
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #8 in Category ---
+Score (Mean ± Std Dev): 0.5852 ± 0.0714
+Standard Error: 0.0412
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #9 in Category ---
+Score (Mean ± Std Dev): 0.5778 ± 0.0801
+Standard Error: 0.0463
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #10 in Category ---
+Score (Mean ± Std Dev): 0.5778 ± 0.0222
+Standard Error: 0.0128
+Configuration (3 seeds):
+  - finetune.lr: 0
+  - finetune.num_steps: 0
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #11 in Category ---
+Score (Mean ± Std Dev): 0.5778 ± 0.0969
+Standard Error: 0.0559
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #12 in Category ---
+Score (Mean ± Std Dev): 0.5556 ± 0.0969
+Standard Error: 0.0559
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #13 in Category ---
+Score (Mean ± Std Dev): 0.5481 ± 0.1026
+Standard Error: 0.0593
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #14 in Category ---
+Score (Mean ± Std Dev): 0.5333 ± 0.0588
+Standard Error: 0.0339
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #15 in Category ---
+Score (Mean ± Std Dev): 0.5259 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #16 in Category ---
+Score (Mean ± Std Dev): 0.5185 ± 0.0841
+Standard Error: 0.0486
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #17 in Category ---
+Score (Mean ± Std Dev): 0.5111 ± 0.0385
+Standard Error: 0.0222
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #18 in Category ---
+Score (Mean ± Std Dev): 0.5111 ± 0.1018
+Standard Error: 0.0588
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #19 in Category ---
+Score (Mean ± Std Dev): 0.4593 ± 0.0679
+Standard Error: 0.0392
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #20 in Category ---
+Score (Mean ± Std Dev): 0.4444 ± 0.0801
+Standard Error: 0.0463
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #21 in Category ---
+Score (Mean ± Std Dev): 0.3852 ± 0.0898
+Standard Error: 0.0519
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #22 in Category ---
+Score (Mean ± Std Dev): 0.3778 ± 0.0770
+Standard Error: 0.0444
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #23 in Category ---
+Score (Mean ± Std Dev): 0.3333 ± 0.1237
+Standard Error: 0.0714
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #24 in Category ---
+Score (Mean ± Std Dev): 0.3259 ± 0.0463
+Standard Error: 0.0267
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #25 in Category ---
+Score (Mean ± Std Dev): 0.2815 ± 0.0679
+Standard Error: 0.0392
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+================================================================================
+===== Category: GCIQL - DDPGBC =====
+================================================================================
+
+--- Rank #1 in Category ---
+Score (Mean ± Std Dev): 0.7481 ± 0.0463
+Standard Error: 0.0267
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #2 in Category ---
+Score (Mean ± Std Dev): 0.7259 ± 0.0128
+Standard Error: 0.0074
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #3 in Category ---
+Score (Mean ± Std Dev): 0.7185 ± 0.0463
+Standard Error: 0.0267
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #4 in Category ---
+Score (Mean ± Std Dev): 0.7185 ± 0.0898
+Standard Error: 0.0519
+Configuration (3 seeds):
+  - finetune.lr: 0
+  - finetune.num_steps: 0
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #5 in Category ---
+Score (Mean ± Std Dev): 0.7111 ± 0.0385
+Standard Error: 0.0222
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #6 in Category ---
+Score (Mean ± Std Dev): 0.6889 ± 0.0222
+Standard Error: 0.0128
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #7 in Category ---
+Score (Mean ± Std Dev): 0.6889 ± 0.0588
+Standard Error: 0.0339
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #8 in Category ---
+Score (Mean ± Std Dev): 0.6741 ± 0.0898
+Standard Error: 0.0519
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #9 in Category ---
+Score (Mean ± Std Dev): 0.6741 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #10 in Category ---
+Score (Mean ± Std Dev): 0.6667 ± 0.1540
+Standard Error: 0.0889
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #11 in Category ---
+Score (Mean ± Std Dev): 0.6519 ± 0.1224
+Standard Error: 0.0707
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #12 in Category ---
+Score (Mean ± Std Dev): 0.6370 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #13 in Category ---
+Score (Mean ± Std Dev): 0.6296 ± 0.0679
+Standard Error: 0.0392
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #14 in Category ---
+Score (Mean ± Std Dev): 0.6148 ± 0.1002
+Standard Error: 0.0579
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #15 in Category ---
+Score (Mean ± Std Dev): 0.5630 ± 0.1683
+Standard Error: 0.0971
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #16 in Category ---
+Score (Mean ± Std Dev): 0.5630 ± 0.1577
+Standard Error: 0.0910
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #17 in Category ---
+Score (Mean ± Std Dev): 0.5556 ± 0.1602
+Standard Error: 0.0925
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #18 in Category ---
+Score (Mean ± Std Dev): 0.5481 ± 0.0841
+Standard Error: 0.0486
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #19 in Category ---
+Score (Mean ± Std Dev): 0.5333 ± 0.0889
+Standard Error: 0.0513
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #20 in Category ---
+Score (Mean ± Std Dev): 0.3704 ± 0.1264
+Standard Error: 0.0730
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #21 in Category ---
+Score (Mean ± Std Dev): 0.3333 ± 0.1764
+Standard Error: 0.1018
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #22 in Category ---
+Score (Mean ± Std Dev): 0.3111 ± 0.2037
+Standard Error: 0.1176
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #23 in Category ---
+Score (Mean ± Std Dev): 0.3111 ± 0.1388
+Standard Error: 0.0801
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #24 in Category ---
+Score (Mean ± Std Dev): 0.2963 ± 0.0925
+Standard Error: 0.0534
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #25 in Category ---
+Score (Mean ± Std Dev): 0.2963 ± 0.1577
+Standard Error: 0.0910
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+
+################################################################################
+### Environment: humanoidmaze-medium-navigate-v0
+################################################################################
+
+================================================================================
+===== Category: GCIQL - AWR =====
+================================================================================
+
+--- Rank #1 in Category ---
+Score (Mean ± Std Dev): 0.2222 ± 0.0801
+Standard Error: 0.0463
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #2 in Category ---
+Score (Mean ± Std Dev): 0.2222 ± 0.0667
+Standard Error: 0.0385
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #3 in Category ---
+Score (Mean ± Std Dev): 0.2074 ± 0.0128
+Standard Error: 0.0074
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #4 in Category ---
+Score (Mean ± Std Dev): 0.2000 ± 0.0385
+Standard Error: 0.0222
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #5 in Category ---
+Score (Mean ± Std Dev): 0.1926 ± 0.0559
+Standard Error: 0.0323
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #6 in Category ---
+Score (Mean ± Std Dev): 0.1926 ± 0.0559
+Standard Error: 0.0323
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #7 in Category ---
+Score (Mean ± Std Dev): 0.1778 ± 0.0222
+Standard Error: 0.0128
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #8 in Category ---
+Score (Mean ± Std Dev): 0.1704 ± 0.0128
+Standard Error: 0.0074
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #9 in Category ---
+Score (Mean ± Std Dev): 0.1630 ± 0.0513
+Standard Error: 0.0296
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #10 in Category ---
+Score (Mean ± Std Dev): 0.1556 ± 0.0801
+Standard Error: 0.0463
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #11 in Category ---
+Score (Mean ± Std Dev): 0.1407 ± 0.0128
+Standard Error: 0.0074
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #12 in Category ---
+Score (Mean ± Std Dev): 0.1407 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #13 in Category ---
+Score (Mean ± Std Dev): 0.1407 ± 0.0128
+Standard Error: 0.0074
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #14 in Category ---
+Score (Mean ± Std Dev): 0.1333 ± 0.0588
+Standard Error: 0.0339
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #15 in Category ---
+Score (Mean ± Std Dev): 0.1333 ± 0.0385
+Standard Error: 0.0222
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #16 in Category ---
+Score (Mean ± Std Dev): 0.1259 ± 0.0559
+Standard Error: 0.0323
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #17 in Category ---
+Score (Mean ± Std Dev): 0.1259 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #18 in Category ---
+Score (Mean ± Std Dev): 0.1111 ± 0.0385
+Standard Error: 0.0222
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #19 in Category ---
+Score (Mean ± Std Dev): 0.1111 ± 0.0667
+Standard Error: 0.0385
+Configuration (3 seeds):
+  - finetune.lr: 0
+  - finetune.num_steps: 0
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #20 in Category ---
+Score (Mean ± Std Dev): 0.1111 ± 0.0385
+Standard Error: 0.0222
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #21 in Category ---
+Score (Mean ± Std Dev): 0.1037 ± 0.0128
+Standard Error: 0.0074
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #22 in Category ---
+Score (Mean ± Std Dev): 0.0963 ± 0.0513
+Standard Error: 0.0296
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #23 in Category ---
+Score (Mean ± Std Dev): 0.0889 ± 0.0588
+Standard Error: 0.0339
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #24 in Category ---
+Score (Mean ± Std Dev): 0.0815 ± 0.0257
+Standard Error: 0.0148
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #25 in Category ---
+Score (Mean ± Std Dev): 0.0741 ± 0.0463
+Standard Error: 0.0267
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+================================================================================
+===== Category: GCIQL - DDPGBC =====
+================================================================================
+
+--- Rank #1 in Category ---
+Score (Mean ± Std Dev): 0.5704 ± 0.0128
+Standard Error: 0.0074
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #2 in Category ---
+Score (Mean ± Std Dev): 0.5259 ± 0.0513
+Standard Error: 0.0296
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #3 in Category ---
+Score (Mean ± Std Dev): 0.5259 ± 0.0559
+Standard Error: 0.0323
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #4 in Category ---
+Score (Mean ± Std Dev): 0.5111 ± 0.0588
+Standard Error: 0.0339
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #5 in Category ---
+Score (Mean ± Std Dev): 0.5037 ± 0.0925
+Standard Error: 0.0534
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #6 in Category ---
+Score (Mean ± Std Dev): 0.4889 ± 0.0770
+Standard Error: 0.0444
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #7 in Category ---
+Score (Mean ± Std Dev): 0.4889 ± 0.0222
+Standard Error: 0.0128
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #8 in Category ---
+Score (Mean ± Std Dev): 0.4667 ± 0.0801
+Standard Error: 0.0463
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #9 in Category ---
+Score (Mean ± Std Dev): 0.4667 ± 0.0222
+Standard Error: 0.0128
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #10 in Category ---
+Score (Mean ± Std Dev): 0.4519 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #11 in Category ---
+Score (Mean ± Std Dev): 0.4519 ± 0.0128
+Standard Error: 0.0074
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #12 in Category ---
+Score (Mean ± Std Dev): 0.4148 ± 0.0559
+Standard Error: 0.0323
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #13 in Category ---
+Score (Mean ± Std Dev): 0.3926 ± 0.0513
+Standard Error: 0.0296
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #14 in Category ---
+Score (Mean ± Std Dev): 0.3926 ± 0.0128
+Standard Error: 0.0074
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #15 in Category ---
+Score (Mean ± Std Dev): 0.3704 ± 0.0559
+Standard Error: 0.0323
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #16 in Category ---
+Score (Mean ± Std Dev): 0.3630 ± 0.0559
+Standard Error: 0.0323
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #17 in Category ---
+Score (Mean ± Std Dev): 0.3630 ± 0.0559
+Standard Error: 0.0323
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #18 in Category ---
+Score (Mean ± Std Dev): 0.3630 ± 0.0513
+Standard Error: 0.0296
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #19 in Category ---
+Score (Mean ± Std Dev): 0.3481 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #20 in Category ---
+Score (Mean ± Std Dev): 0.3407 ± 0.0841
+Standard Error: 0.0486
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #21 in Category ---
+Score (Mean ± Std Dev): 0.3407 ± 0.0841
+Standard Error: 0.0486
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #22 in Category ---
+Score (Mean ± Std Dev): 0.3333 ± 0.0222
+Standard Error: 0.0128
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #23 in Category ---
+Score (Mean ± Std Dev): 0.3333 ± 0.0444
+Standard Error: 0.0257
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #24 in Category ---
+Score (Mean ± Std Dev): 0.3185 ± 0.0128
+Standard Error: 0.0074
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #25 in Category ---
+Score (Mean ± Std Dev): 0.2741 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 0
+  - finetune.num_steps: 0
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+
+################################################################################
+### Environment: humanoidmaze-medium-stitch-v0
+################################################################################
+
+================================================================================
+===== Category: GCIQL - AWR =====
+================================================================================
+
+--- Rank #1 in Category ---
+Score (Mean ± Std Dev): 0.3259 ± 0.0714
+Standard Error: 0.0412
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #2 in Category ---
+Score (Mean ± Std Dev): 0.3185 ± 0.0714
+Standard Error: 0.0412
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #3 in Category ---
+Score (Mean ± Std Dev): 0.3037 ± 0.0559
+Standard Error: 0.0323
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #4 in Category ---
+Score (Mean ± Std Dev): 0.2963 ± 0.1264
+Standard Error: 0.0730
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #5 in Category ---
+Score (Mean ± Std Dev): 0.2889 ± 0.0385
+Standard Error: 0.0222
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #6 in Category ---
+Score (Mean ± Std Dev): 0.2815 ± 0.1050
+Standard Error: 0.0606
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #7 in Category ---
+Score (Mean ± Std Dev): 0.2593 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #8 in Category ---
+Score (Mean ± Std Dev): 0.2593 ± 0.0679
+Standard Error: 0.0392
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #9 in Category ---
+Score (Mean ± Std Dev): 0.2296 ± 0.0513
+Standard Error: 0.0296
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #10 in Category ---
+Score (Mean ± Std Dev): 0.2296 ± 0.0128
+Standard Error: 0.0074
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #11 in Category ---
+Score (Mean ± Std Dev): 0.2074 ± 0.0679
+Standard Error: 0.0392
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #12 in Category ---
+Score (Mean ± Std Dev): 0.1852 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #13 in Category ---
+Score (Mean ± Std Dev): 0.0370 ± 0.0257
+Standard Error: 0.0148
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #14 in Category ---
+Score (Mean ± Std Dev): 0.0370 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #15 in Category ---
+Score (Mean ± Std Dev): 0.0296 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 0
+  - finetune.num_steps: 0
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #16 in Category ---
+Score (Mean ± Std Dev): 0.0296 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #17 in Category ---
+Score (Mean ± Std Dev): 0.0296 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #18 in Category ---
+Score (Mean ± Std Dev): 0.0296 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #19 in Category ---
+Score (Mean ± Std Dev): 0.0296 ± 0.0128
+Standard Error: 0.0074
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #20 in Category ---
+Score (Mean ± Std Dev): 0.0296 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #21 in Category ---
+Score (Mean ± Std Dev): 0.0296 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #22 in Category ---
+Score (Mean ± Std Dev): 0.0296 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #23 in Category ---
+Score (Mean ± Std Dev): 0.0296 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #24 in Category ---
+Score (Mean ± Std Dev): 0.0296 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #25 in Category ---
+Score (Mean ± Std Dev): 0.0222 ± 0.0000
+Standard Error: 0.0000
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+================================================================================
+===== Category: GCIQL - DDPGBC =====
+================================================================================
+
+--- Rank #1 in Category ---
+Score (Mean ± Std Dev): 0.5259 ± 0.0780
+Standard Error: 0.0451
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #2 in Category ---
+Score (Mean ± Std Dev): 0.5037 ± 0.0898
+Standard Error: 0.0519
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #3 in Category ---
+Score (Mean ± Std Dev): 0.4593 ± 0.1118
+Standard Error: 0.0646
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #4 in Category ---
+Score (Mean ± Std Dev): 0.4593 ± 0.0257
+Standard Error: 0.0148
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #5 in Category ---
+Score (Mean ± Std Dev): 0.4222 ± 0.0588
+Standard Error: 0.0339
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #6 in Category ---
+Score (Mean ± Std Dev): 0.4222 ± 0.1176
+Standard Error: 0.0679
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #7 in Category ---
+Score (Mean ± Std Dev): 0.4000 ± 0.0222
+Standard Error: 0.0128
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #8 in Category ---
+Score (Mean ± Std Dev): 0.3926 ± 0.0898
+Standard Error: 0.0519
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #9 in Category ---
+Score (Mean ± Std Dev): 0.3852 ± 0.1302
+Standard Error: 0.0752
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #10 in Category ---
+Score (Mean ± Std Dev): 0.3778 ± 0.0385
+Standard Error: 0.0222
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #11 in Category ---
+Score (Mean ± Std Dev): 0.3778 ± 0.1111
+Standard Error: 0.0642
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #12 in Category ---
+Score (Mean ± Std Dev): 0.3556 ± 0.0222
+Standard Error: 0.0128
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #13 in Category ---
+Score (Mean ± Std Dev): 0.1259 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #14 in Category ---
+Score (Mean ± Std Dev): 0.1185 ± 0.0257
+Standard Error: 0.0148
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #15 in Category ---
+Score (Mean ± Std Dev): 0.1185 ± 0.0257
+Standard Error: 0.0148
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #16 in Category ---
+Score (Mean ± Std Dev): 0.1185 ± 0.0257
+Standard Error: 0.0148
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #17 in Category ---
+Score (Mean ± Std Dev): 0.1185 ± 0.0257
+Standard Error: 0.0148
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #18 in Category ---
+Score (Mean ± Std Dev): 0.1185 ± 0.0463
+Standard Error: 0.0267
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #19 in Category ---
+Score (Mean ± Std Dev): 0.1185 ± 0.0257
+Standard Error: 0.0148
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #20 in Category ---
+Score (Mean ± Std Dev): 0.1111 ± 0.0385
+Standard Error: 0.0222
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #21 in Category ---
+Score (Mean ± Std Dev): 0.1037 ± 0.0463
+Standard Error: 0.0267
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #22 in Category ---
+Score (Mean ± Std Dev): 0.1037 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #23 in Category ---
+Score (Mean ± Std Dev): 0.1037 ± 0.0513
+Standard Error: 0.0296
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #24 in Category ---
+Score (Mean ± Std Dev): 0.0963 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #25 in Category ---
+Score (Mean ± Std Dev): 0.0815 ± 0.0463
+Standard Error: 0.0267
+Configuration (3 seeds):
+  - finetune.lr: 0
+  - finetune.num_steps: 0
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+
+################################################################################
+### Environment: pointmaze-medium-navigate-v0
+################################################################################
+
+================================================================================
+===== Category: GCIQL - AWR =====
+================================================================================
+
+--- Rank #1 in Category ---
+Score (Mean ± Std Dev): 0.8198 ± 0.0549
+Standard Error: 0.0183
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #2 in Category ---
+Score (Mean ± Std Dev): 0.8148 ± 0.0778
+Standard Error: 0.0259
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #3 in Category ---
+Score (Mean ± Std Dev): 0.8049 ± 0.0542
+Standard Error: 0.0181
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #4 in Category ---
+Score (Mean ± Std Dev): 0.7926 ± 0.0694
+Standard Error: 0.0231
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #5 in Category ---
+Score (Mean ± Std Dev): 0.7852 ± 0.0676
+Standard Error: 0.0225
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #6 in Category ---
+Score (Mean ± Std Dev): 0.7827 ± 0.0760
+Standard Error: 0.0253
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #7 in Category ---
+Score (Mean ± Std Dev): 0.7827 ± 0.0606
+Standard Error: 0.0202
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #8 in Category ---
+Score (Mean ± Std Dev): 0.7827 ± 0.0397
+Standard Error: 0.0132
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #9 in Category ---
+Score (Mean ± Std Dev): 0.7778 ± 0.0521
+Standard Error: 0.0174
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #10 in Category ---
+Score (Mean ± Std Dev): 0.7753 ± 0.0603
+Standard Error: 0.0201
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #11 in Category ---
+Score (Mean ± Std Dev): 0.7728 ± 0.0692
+Standard Error: 0.0231
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #12 in Category ---
+Score (Mean ± Std Dev): 0.7728 ± 0.0954
+Standard Error: 0.0318
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #13 in Category ---
+Score (Mean ± Std Dev): 0.7580 ± 0.0526
+Standard Error: 0.0175
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #14 in Category ---
+Score (Mean ± Std Dev): 0.7556 ± 0.0831
+Standard Error: 0.0277
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #15 in Category ---
+Score (Mean ± Std Dev): 0.7506 ± 0.0530
+Standard Error: 0.0177
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #16 in Category ---
+Score (Mean ± Std Dev): 0.7506 ± 0.0800
+Standard Error: 0.0267
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #17 in Category ---
+Score (Mean ± Std Dev): 0.7407 ± 0.0248
+Standard Error: 0.0083
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #18 in Category ---
+Score (Mean ± Std Dev): 0.7407 ± 0.0711
+Standard Error: 0.0237
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #19 in Category ---
+Score (Mean ± Std Dev): 0.7383 ± 0.0616
+Standard Error: 0.0205
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #20 in Category ---
+Score (Mean ± Std Dev): 0.7358 ± 0.0835
+Standard Error: 0.0278
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #21 in Category ---
+Score (Mean ± Std Dev): 0.7259 ± 0.0598
+Standard Error: 0.0199
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #22 in Category ---
+Score (Mean ± Std Dev): 0.7259 ± 0.0778
+Standard Error: 0.0259
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #23 in Category ---
+Score (Mean ± Std Dev): 0.6938 ± 0.0941
+Standard Error: 0.0314
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #24 in Category ---
+Score (Mean ± Std Dev): 0.6790 ± 0.0630
+Standard Error: 0.0210
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #25 in Category ---
+Score (Mean ± Std Dev): 0.1654 ± 0.0825
+Standard Error: 0.0275
+Configuration (9 seeds):
+  - finetune.lr: 0
+  - finetune.num_steps: 0
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+================================================================================
+===== Category: GCIQL - DDPGBC =====
+================================================================================
+
+--- Rank #1 in Category ---
+Score (Mean ± Std Dev): 0.6074 ± 0.0559
+Standard Error: 0.0323
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #2 in Category ---
+Score (Mean ± Std Dev): 0.6000 ± 0.0000
+Standard Error: 0.0000
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #3 in Category ---
+Score (Mean ± Std Dev): 0.5852 ± 0.0257
+Standard Error: 0.0148
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #4 in Category ---
+Score (Mean ± Std Dev): 0.5852 ± 0.0128
+Standard Error: 0.0074
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #5 in Category ---
+Score (Mean ± Std Dev): 0.5852 ± 0.0128
+Standard Error: 0.0074
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #6 in Category ---
+Score (Mean ± Std Dev): 0.5778 ± 0.0385
+Standard Error: 0.0222
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #7 in Category ---
+Score (Mean ± Std Dev): 0.5778 ± 0.0385
+Standard Error: 0.0222
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #8 in Category ---
+Score (Mean ± Std Dev): 0.5778 ± 0.0222
+Standard Error: 0.0128
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #9 in Category ---
+Score (Mean ± Std Dev): 0.5778 ± 0.0222
+Standard Error: 0.0128
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #10 in Category ---
+Score (Mean ± Std Dev): 0.5704 ± 0.0513
+Standard Error: 0.0296
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #11 in Category ---
+Score (Mean ± Std Dev): 0.5630 ± 0.0463
+Standard Error: 0.0267
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #12 in Category ---
+Score (Mean ± Std Dev): 0.5630 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #13 in Category ---
+Score (Mean ± Std Dev): 0.5630 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #14 in Category ---
+Score (Mean ± Std Dev): 0.5556 ± 0.0770
+Standard Error: 0.0444
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #15 in Category ---
+Score (Mean ± Std Dev): 0.5481 ± 0.0128
+Standard Error: 0.0074
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #16 in Category ---
+Score (Mean ± Std Dev): 0.5333 ± 0.0588
+Standard Error: 0.0339
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #17 in Category ---
+Score (Mean ± Std Dev): 0.5259 ± 0.0128
+Standard Error: 0.0074
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #18 in Category ---
+Score (Mean ± Std Dev): 0.5259 ± 0.1283
+Standard Error: 0.0741
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #19 in Category ---
+Score (Mean ± Std Dev): 0.5259 ± 0.0339
+Standard Error: 0.0196
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #20 in Category ---
+Score (Mean ± Std Dev): 0.5185 ± 0.1026
+Standard Error: 0.0593
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #21 in Category ---
+Score (Mean ± Std Dev): 0.5185 ± 0.0780
+Standard Error: 0.0451
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #22 in Category ---
+Score (Mean ± Std Dev): 0.5185 ± 0.0642
+Standard Error: 0.0370
+Configuration (3 seeds):
+  - finetune.lr: 0
+  - finetune.num_steps: 0
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #23 in Category ---
+Score (Mean ± Std Dev): 0.5111 ± 0.0385
+Standard Error: 0.0222
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #24 in Category ---
+Score (Mean ± Std Dev): 0.4963 ± 0.0898
+Standard Error: 0.0519
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #25 in Category ---
+Score (Mean ± Std Dev): 0.4667 ± 0.1018
+Standard Error: 0.0588
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+
+################################################################################
+### Environment: pointmaze-medium-stitch-v0
+################################################################################
+
+================================================================================
+===== Category: GCIQL - AWR =====
+================================================================================
+
+--- Rank #1 in Category ---
+Score (Mean ± Std Dev): 0.8469 ± 0.0662
+Standard Error: 0.0221
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #2 in Category ---
+Score (Mean ± Std Dev): 0.8074 ± 0.0577
+Standard Error: 0.0192
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #3 in Category ---
+Score (Mean ± Std Dev): 0.7877 ± 0.0639
+Standard Error: 0.0213
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #4 in Category ---
+Score (Mean ± Std Dev): 0.7753 ± 0.0946
+Standard Error: 0.0315
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #5 in Category ---
+Score (Mean ± Std Dev): 0.7704 ± 0.0875
+Standard Error: 0.0292
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #6 in Category ---
+Score (Mean ± Std Dev): 0.7481 ± 0.0694
+Standard Error: 0.0231
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #7 in Category ---
+Score (Mean ± Std Dev): 0.4296 ± 0.0861
+Standard Error: 0.0287
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #8 in Category ---
+Score (Mean ± Std Dev): 0.3827 ± 0.1059
+Standard Error: 0.0353
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #9 in Category ---
+Score (Mean ± Std Dev): 0.1630 ± 0.0729
+Standard Error: 0.0243
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #10 in Category ---
+Score (Mean ± Std Dev): 0.1333 ± 0.0648
+Standard Error: 0.0216
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #11 in Category ---
+Score (Mean ± Std Dev): 0.0593 ± 0.0430
+Standard Error: 0.0143
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #12 in Category ---
+Score (Mean ± Std Dev): 0.0272 ± 0.0098
+Standard Error: 0.0033
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #13 in Category ---
+Score (Mean ± Std Dev): 0.0049 ± 0.0148
+Standard Error: 0.0049
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #14 in Category ---
+Score (Mean ± Std Dev): 0.0025 ± 0.0074
+Standard Error: 0.0025
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #15 in Category ---
+Score (Mean ± Std Dev): 0.0025 ± 0.0074
+Standard Error: 0.0025
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #16 in Category ---
+Score (Mean ± Std Dev): 0.0025 ± 0.0074
+Standard Error: 0.0025
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #17 in Category ---
+Score (Mean ± Std Dev): 0.0000 ± 0.0000
+Standard Error: 0.0000
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #18 in Category ---
+Score (Mean ± Std Dev): 0.0000 ± 0.0000
+Standard Error: 0.0000
+Configuration (9 seeds):
+  - finetune.lr: 0
+  - finetune.num_steps: 0
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #19 in Category ---
+Score (Mean ± Std Dev): 0.0000 ± 0.0000
+Standard Error: 0.0000
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #20 in Category ---
+Score (Mean ± Std Dev): 0.0000 ± 0.0000
+Standard Error: 0.0000
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #21 in Category ---
+Score (Mean ± Std Dev): 0.0000 ± 0.0000
+Standard Error: 0.0000
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #22 in Category ---
+Score (Mean ± Std Dev): 0.0000 ± 0.0000
+Standard Error: 0.0000
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #23 in Category ---
+Score (Mean ± Std Dev): 0.0000 ± 0.0000
+Standard Error: 0.0000
+Configuration (9 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #24 in Category ---
+Score (Mean ± Std Dev): 0.0000 ± 0.0000
+Standard Error: 0.0000
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #25 in Category ---
+Score (Mean ± Std Dev): 0.0000 ± 0.0000
+Standard Error: 0.0000
+Configuration (9 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+================================================================================
+===== Category: GCIQL - DDPGBC =====
+================================================================================
+
+--- Rank #1 in Category ---
+Score (Mean ± Std Dev): 0.4074 ± 0.0642
+Standard Error: 0.0370
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #2 in Category ---
+Score (Mean ± Std Dev): 0.4074 ± 0.0679
+Standard Error: 0.0392
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #3 in Category ---
+Score (Mean ± Std Dev): 0.4000 ± 0.0385
+Standard Error: 0.0222
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #4 in Category ---
+Score (Mean ± Std Dev): 0.3778 ± 0.0770
+Standard Error: 0.0444
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #5 in Category ---
+Score (Mean ± Std Dev): 0.3556 ± 0.0801
+Standard Error: 0.0463
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #6 in Category ---
+Score (Mean ± Std Dev): 0.3481 ± 0.0925
+Standard Error: 0.0534
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #7 in Category ---
+Score (Mean ± Std Dev): 0.3481 ± 0.1050
+Standard Error: 0.0606
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #8 in Category ---
+Score (Mean ± Std Dev): 0.3407 ± 0.1224
+Standard Error: 0.0707
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #9 in Category ---
+Score (Mean ± Std Dev): 0.3037 ± 0.0898
+Standard Error: 0.0519
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #10 in Category ---
+Score (Mean ± Std Dev): 0.2815 ± 0.1050
+Standard Error: 0.0606
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #11 in Category ---
+Score (Mean ± Std Dev): 0.2741 ± 0.0257
+Standard Error: 0.0148
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 100
+
+--- Rank #12 in Category ---
+Score (Mean ± Std Dev): 0.2741 ± 0.0679
+Standard Error: 0.0392
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #13 in Category ---
+Score (Mean ± Std Dev): 0.2667 ± 0.0889
+Standard Error: 0.0513
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: True
+  - finetune.replan_horizon: 200
+
+--- Rank #14 in Category ---
+Score (Mean ± Std Dev): 0.2444 ± 0.1176
+Standard Error: 0.0679
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #15 in Category ---
+Score (Mean ± Std Dev): 0.2444 ± 0.1018
+Standard Error: 0.0588
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #16 in Category ---
+Score (Mean ± Std Dev): 0.2444 ± 0.1176
+Standard Error: 0.0679
+Configuration (3 seeds):
+  - finetune.lr: 0
+  - finetune.num_steps: 0
+  - finetune.filter_by_mc: False
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #17 in Category ---
+Score (Mean ± Std Dev): 0.2074 ± 0.0559
+Standard Error: 0.0323
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #18 in Category ---
+Score (Mean ± Std Dev): 0.2074 ± 0.0559
+Standard Error: 0.0323
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #19 in Category ---
+Score (Mean ± Std Dev): 0.1926 ± 0.1224
+Standard Error: 0.0707
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #20 in Category ---
+Score (Mean ± Std Dev): 0.1926 ± 0.1224
+Standard Error: 0.0707
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 200
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #21 in Category ---
+Score (Mean ± Std Dev): 0.1926 ± 0.1224
+Standard Error: 0.0707
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #22 in Category ---
+Score (Mean ± Std Dev): 0.1926 ± 0.1224
+Standard Error: 0.0707
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #23 in Category ---
+Score (Mean ± Std Dev): 0.1926 ± 0.1224
+Standard Error: 0.0707
+Configuration (3 seeds):
+  - finetune.lr: 0.0003
+  - finetune.num_steps: 100
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100
+
+--- Rank #24 in Category ---
+Score (Mean ± Std Dev): 0.1926 ± 0.1224
+Standard Error: 0.0707
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 200
+
+--- Rank #25 in Category ---
+Score (Mean ± Std Dev): 0.1926 ± 0.1224
+Standard Error: 0.0707
+Configuration (3 seeds):
+  - finetune.lr: 3e-05
+  - finetune.num_steps: 50
+  - finetune.filter_by_mc: True
+  - finetune.filter_by_recursive_mdp: False
+  - finetune.replan_horizon: 100

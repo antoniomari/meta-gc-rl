@@ -24,7 +24,9 @@ finetune:
   filter_by_mc: false  # enables on-policy GCFT
   filter_by_td: false  # enables off-policy GCFT
   relevance_by_value: false  # replaces the reward-based relevance criterion with a value-based one
-
+  saw: false
+  reset_after_horizon: false  # resets the agent after the replan horizon is reached
+  
 train_steps: 1000000
 log_interval: 5000
 eval_interval: 100000

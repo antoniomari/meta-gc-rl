@@ -181,7 +181,9 @@ def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to
         mask *= (start_matches.cumsum(-1) > 0)  # only keep from matches
         col_indices = np.arange(ep_len)
         mask *= col_indices[None] < scores.argmin(-1)[..., None]  # discard after best point
-        return mask.flatten()
+        #return mask.flatten()
+        max_len = mask.sum(-1).max()
+        return mask.flatten(), max_len
 
 
 def filter_from_state_goal(dataset, obs, goal, quantile, slack, sim_threshold, finetune_kwargs=None):
@@ -531,9 +533,13 @@ class GCDataset:
         # Then, sample a batch actively
         active_batch = self.sample(finetune_bs, idxs)
 
-        # If fix_actor_goal is True, we set the actor goals to the same goal for all transitions in the active batch.
-        if fix_actor_goal:
-            active_batch['actor_goals'] = goal
+        # We set the actor goals to the same goal for fix_actor_goal percentage of transitions in the active batch.
+        idxs = np.random.uniform(size=(finetune_bs,)) < fix_actor_goal
+        if finetune_kwargs.get('saw', False):
+            active_batch['high_actor_goals'][idxs] = goal
+            #active_batch['low_actor_goals'][idxs] = goal
+        else:
+            active_batch['actor_goals'][idxs] = goal
 
         return {k: np.concatenate([uniform_batch[k], active_batch[k]]) for k in uniform_batch}
 
@@ -545,6 +551,7 @@ class GCDataset:
         mc_quantile = finetune_kwargs['mc_quantile']
         mc_slack = finetune_kwargs['mc_slack']
         mc_similarity_threshold = finetune_kwargs['mc_similarity_threshold']
+        max_len = np.inf
 
         # GC-TTT without critic: only find "optimal trajectories", no stitching
         # - trajectories with high Monte-Carlo returns
@@ -568,13 +575,24 @@ class GCDataset:
             batch_size=10000
             for i in range((len(_obs) // batch_size) + 1):
                 _sli, _ce = i*batch_size, min((i+1)*batch_size, len(_obs))
-                _values.append(agent.network.select('value')(_obs[_sli:_ce], goal.reshape(1, -1).repeat(_ce - _sli, 0)))
-                _start_values.append(agent.network.select('value')(_obs[_sli:_ce], obs.reshape(1, -1).repeat(_ce - _sli, 0)))
+                if finetune_kwargs.get('saw', False):
+                    v1, v2 = agent.network.select('value')(_obs[_sli:_ce], goal.reshape(1, -1).repeat(_ce - _sli, 0))
+                    v = (v1 + v2) / 2
+                    _values.append(v)
+                    del v1, v2, v
+                    v1, v2 = agent.network.select('value')(_obs[_sli:_ce], obs.reshape(1, -1).repeat(_ce - _sli, 0))
+                    v = (v1 + v2) / 2
+                    _start_values.append(v)
+                    del v1, v2, v
+                else:
+                    _values.append(agent.network.select('value')(_obs[_sli:_ce], goal.reshape(1, -1).repeat(_ce - _sli, 0)))
+                    _start_values.append(agent.network.select('value')(_obs[_sli:_ce], obs.reshape(1, -1).repeat(_ce - _sli, 0)))
             _values = jnp.concatenate(_values, 0)
             state_to_goal_dist = (jnp.log((_values/(1/(1 - 0.99)) + 1)) / jnp.log(0.99))
             _start_values = jnp.concatenate(_start_values, 0)
             start_to_state_dist = (jnp.log((_start_values/(1/(1 - 0.99)) + 1)) / jnp.log(0.99))
-            td_filter = filter_by_recursive_mdp(self.dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist, start_to_state_dist)
+            #td_filter = filter_by_recursive_mdp(self.dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist, start_to_state_dist)
+            td_filter, max_len = filter_by_recursive_mdp(self.dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist, start_to_state_dist)
             _filter = _filter * td_filter 
 
         
@@ -601,7 +619,8 @@ class GCDataset:
                 plt.close()
             # wandb.log({'ZFilter': wandb.Image(f'Zfilter_{exp_name}.png')})
 
-        return _filter
+        #return _filter
+        return _filter, max_len
 
     def augment(self, batch, keys):
         """Apply image augmentation to the given keys."""

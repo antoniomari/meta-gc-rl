@@ -1,0 +1,83 @@
+name:  &job_name antmaze-all
+results_dir: /fast/malbaba/results/offline_finetuning
+git_branch: main
+git_commit: null
+script_path: main.py
+pre_script: null
+cluster_requirements:
+  cpus: 8
+  ram: 32G
+  gpus: 1
+  disk: 64GB
+  bid: 25
+  forbidden_hostnames: ['g054', 'g156', 'i206']
+  time: 24:00:00
+default_params: default.yaml
+grid:
+  run_group: *job_name
+  train_steps: 1000001
+  eval_interval: 100000
+  eval_start: 800000
+  log_interval: 50000
+  save_interval: 50000
+  eval_on_cpu: 0
+  eval_episodes: 3
+  '[env_name, agent.agent_name, agent.actor_loss, finetune.actor_loss, agent.alpha, agent.actor_p_randomgoal, agent.actor_p_trajgoal]': [
+    [antmaze-medium-stitch-v0, gciql, ddpgbc, ddpgbc, 0.3, 0.5, 0.5],
+    [antmaze-medium-navigate-v0, gciql, ddpgbc, ddpgbc, 0.3, 0.0, 1.0],
+    [antmaze-medium-stitch-v0, gciql, awr, awr, 0.3, 0.5, 0.5],
+    [antmaze-medium-navigate-v0, gciql, awr, awr, 0.3, 0.0, 1.0],
+    [antmaze-medium-stitch-v0, gciql, bc, bc, 0.3, 0.0, 1.0], # 0.3 is default alpha for GCIQL
+    [antmaze-medium-navigate-v0, gciql, bc, bc, 0.3, 0.0, 1.0], # 0.3 is default alpha for GCIQL
+
+  ]
+
+  agent.high_alpha: 3.0
+  agent.low_alpha: 3.0
+  #agent.alpha: 0.3
+
+  finetune.ratio: 1.0
+  finetune.fix_actor_goal: 1.0
+  finetune.filter_by_td: false
+  finetune.mc_quantile: 0.2 #0.2
+  finetune.mc_slack: 10 #10 # might change this to 5
+  finetune.sorb_len: 5 # not important for recursive
+  finetune.td_correction_horizon: 20
+  finetune.td_quantile: 0.2
+  finetune.filter_by_argmax: false
+  finetune.filter_by_nstep_td: false
+
+  finetune.max_steps: 15
+  finetune.min_steps: 10
+  finetune.mc_similarity_threshold: 1.0
+
+  '[finetune.lr, finetune.num_steps, finetune.filter_by_mc, finetune.filter_by_recursive_mdp, finetune.replan_horizon]': [
+    [0, 0, false, false, 100],
+    [3.e-4, 50, true, false, 100],
+    [3.e-4, 50, true, false, 200],
+    [3.e-5, 50, true, false, 100],
+    [3.e-5, 50, true, false, 200],
+    [3.e-4, 100, true, false, 100],
+    [3.e-4, 100, true, false, 200],
+    [3.e-5, 100, true, false, 100],
+    [3.e-5, 100, true, false, 200],
+    [3.e-4, 200, true, false, 100],
+    [3.e-4, 200, true, false, 200],
+    [3.e-5, 200, true, false, 100],
+    [3.e-5, 200, true, false, 200],
+    [3.e-4, 50, false, true, 100],
+    [3.e-4, 50, false, true, 200],
+    [3.e-5, 50, false, true, 100],
+    [3.e-5, 50, false, true, 200],
+    [3.e-4, 100, false, true, 100],
+    [3.e-4, 100, false, true, 200],
+    [3.e-5, 100, false, true, 100],
+    [3.e-5, 100, false, true, 200],
+    [3.e-4, 200, false, true, 100],
+    [3.e-4, 200, false, true, 200],
+    [3.e-5, 200, false, true, 100],
+    [3.e-5, 200, false, true, 200],
+  ]
+
+  seed: [0, 1, 2]
+

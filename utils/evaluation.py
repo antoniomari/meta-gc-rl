@@ -82,11 +82,16 @@ def evaluate(
         # Simple script to plot critic and policy output in a 2D environment
         # We sample a batch from the training dataset, then calculate both values and actions on sampled batch
         import numpy as np
-        def make_plots(suffix):
+        def make_plots(suffix, is_saw):
             import matplotlib.pyplot as plt
             _batch = train_dataset.sample(10000)
             _obs = _batch['observations']
-            values = agent.network.select('value')(_obs, goal.reshape(1, -1).repeat(10000, 0))
+            if is_saw:
+                v1, v2 = agent.network.select('value')(_obs, goal.reshape(1, -1).repeat(10000, 0))
+                values = (v1 + v2) / 2
+                del v1, v2
+            else:
+                values = agent.network.select('value')(_obs, goal.reshape(1, -1).repeat(10000, 0))
             actions = agent.network.select('actor')(_obs, goal.reshape(1, -1).repeat(10000, 0)).mean()
             import io
             import wandb
@@ -117,11 +122,12 @@ def evaluate(
                 plt.close()
         
         # Plotting values and actions before fine-tuning
-        make_plots('pre')
+        make_plots('pre', finetune_config.get('saw', False))
 
         finetune_stats = defaultdict(list)
         recursive_mdp = finetune_config.get('filter_by_recursive_mdp', False)
-        aggregated_filters = []  
+        aggregated_filters = []
+        current_filter = None
 
         # Default GC-TTT (with critic)
         # - recursive_mdp = True
@@ -168,8 +174,9 @@ def evaluate(
                 finetune_config_to_pass = current_finetune_config
 
                 # Filtering the dataset for active test-time fine-tuning.
-                _filter = train_dataset.prepare_active_sample(agent, observation, goal, finetune_config_to_pass, exp_name=exp_name,
-                                                              log_filter=False)
+                _filter, max_len = train_dataset.prepare_active_sample(agent, observation, goal, finetune_config_to_pass, exp_name=exp_name,
+                                                                       log_filter=False)
+                current_filter = _filter
                 aggregated_filters.append(_filter)
                 if _filter.sum() > 0:
                     for _ in range(finetune_config.num_steps):
@@ -186,13 +193,38 @@ def evaluate(
                         # Update the agent with the sampled batch.
                         agent, update_info = agent.update(batch, finetuning=True)
                         add_to(finetune_stats, flatten(update_info))
+                    
+                    # Log the filter after fine-tuning, also show the cuurent state of the agent as red
+                    import wandb
+                    import matplotlib.pyplot as plt
+                    import io
+                    from PIL import Image
+                    _obs = train_dataset.dataset['observations']  # assuming dataset is available here
+                    filtered_pbs = _obs[_filter.astype(bool)]
+                    buf = io.BytesIO()
+                    plt.scatter(_obs[:5000, 0], _obs[:5000,1])
+                    plt.scatter(filtered_pbs[:, 0], filtered_pbs[:, 1], alpha=0.5)
+                    plt.scatter(observation[0], observation[1], color='red', s=50)
+                    plt.savefig(buf, format='png')
+                    plt.close()
+                    buf.seek(0)
+                    img = Image.open(buf)
+                    img_array = np.array(img)
+                    wandb.log({'ZFilter_Partial': wandb.Image(img_array)})
+                    del img, img_array, buf
+
+                    import matplotlib.pyplot as plt
                 
                 actor_fn = supply_rng(agent.sample_actions, rng=jax.random.PRNGKey(np.random.randint(0, 2**32)))
                 
                 # Execute the policy for a fixed short horizon before replanning.
-                for _ in range(replan_horizon):
+                for _step in range(replan_horizon):
                     if done:
                         break
+                    # check if finetune.reset_after_horizon is set to True and enter the loop
+                    if _step > max_len and finetune_config.get('reset_after_horizon', False):
+                        agent = agent.replace(network=old_train_state, config=old_config)
+                        actor_fn = supply_rng(agent.sample_actions, rng=jax.random.PRNGKey(np.random.randint(0, 2**32)))
                     action = actor_fn(observations=observation, goals=goal, temperature=eval_temperature)
                     action = np.array(action)
                     if not config.get('discrete'):
@@ -261,7 +293,7 @@ def evaluate(
                 trajs.append(traj)
             else:
                 renders.append(np.array(render))
-            make_plots('post')
+            make_plots('post', finetune_config.get('saw', False))
 
         # GC-TTT without critic
         else:
@@ -305,7 +337,7 @@ def evaluate(
                         current_finetune_config['goal_is_oracle_rep'] = False
 
                 finetune_config_to_pass = current_finetune_config
-                _filter = train_dataset.prepare_active_sample(agent, observation, goal, finetune_config_to_pass, exp_name=exp_name)
+                _filter, max_len = train_dataset.prepare_active_sample(agent, observation, goal, finetune_config_to_pass, exp_name=exp_name)
                 # Skip fine-tuning if the filter would select nothing
                 num_steps = finetune_config.num_steps if _filter.sum() else 0
                 for _ in range(num_steps):
@@ -321,7 +353,7 @@ def evaluate(
                     add_to(finetune_stats, flatten(info))
 
             # Plotting values and actions after fine-tuning
-            make_plots('post')
+            make_plots('post', finetune_config.get('saw', False))
 
             actor_fn = supply_rng(agent.sample_actions, rng=jax.random.PRNGKey(np.random.randint(0, 2**32)))
 
@@ -368,7 +400,7 @@ def evaluate(
         agent = agent.replace(network=old_train_state, config=old_config)
 
     stats.update({'finetune/' + k: v for k, v in finetune_stats.items()})
-    print('stats', stats)
+    #print('stats', stats)
     for k, v in stats.items():
         stats[k] = np.mean(v)
 
