@@ -11,6 +11,7 @@ dist/
 configs/
 logs/
 scripts/
+old/
 
 # Ignore specific files
 create.py
