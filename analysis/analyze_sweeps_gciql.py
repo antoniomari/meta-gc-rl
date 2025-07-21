@@ -17,7 +17,7 @@ WANDB_PROJECT = "TTT_AllFinalRuns"
 METRIC_TO_ANALYZE = "evaluation/overall_success"
 
 # 3. Define the output filename for the text report
-OUTPUT_FILENAME = "analysis_report_GCIQL.txt"
+OUTPUT_FILENAME = "analysis_report_GCIQL_DDPGBC.txt"
 
 # 4. Set the number of parallel workers to fetch data.
 MAX_WORKERS = 256 # Increased for potentially faster network IO
@@ -26,7 +26,7 @@ MAX_WORKERS = 256 # Increased for potentially faster network IO
 PARAM_GRID = {
     'env_name': ['pointmaze-medium-stitch-v0', 'pointmaze-medium-navigate-v0', 'antmaze-medium-stitch-v0', 'antmaze-medium-navigate-v0', 'humanoidmaze-medium-stitch-v0', 'humanoidmaze-medium-navigate-v0', 'cube-single-play-v0'],
     'agent.agent_name': ['gciql'],
-    'finetune.actor_loss': ['ddpgbc', 'awr'],
+    'finetune.actor_loss': ['ddpgbc'], #,'awr'], 
     'finetune.lr': [0, 3.e-4, 3.e-5],
     'finetune.num_steps': [0, 50, 100, 200],
     'finetune.filter_by_mc': [True, False],

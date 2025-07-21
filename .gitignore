@@ -12,6 +12,7 @@ configs/
 logs/
 scripts/
 old/
+analysis/
 
 # Ignore specific files
 create.py

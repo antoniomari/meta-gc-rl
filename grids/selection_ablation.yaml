@@ -1,4 +1,4 @@
-name:  &job_name selection-ablation
+name:  &job_name selection-ablation-updatedhyperparameters
 results_dir: /fast/malbaba/results/offline_finetuning
 git_branch: main
 git_commit: null
@@ -22,10 +22,6 @@ grid:
   save_interval: 50000
   eval_on_cpu: 0
   eval_episodes: 3
-  '[env_name, agent.agent_name, agent.actor_loss, finetune.actor_loss, agent.alpha, agent.actor_p_randomgoal, agent.actor_p_trajgoal]': [
-    [antmaze-medium-stitch-v0, gciql, ddpgbc, ddpgbc, 0.3, 0.5, 0.5],
-    [pointmaze-medium-stitch-v0, gciql, ddpgbc, ddpgbc, 0.003, 0.5, 0.5],
-  ]
 
   agent.high_alpha: 3.0
   agent.low_alpha: 3.0
@@ -46,10 +42,15 @@ grid:
   finetune.min_steps: 10
   finetune.mc_similarity_threshold: 1.0
 
-  '[finetune.lr, finetune.num_steps, finetune.filter_by_mc, finetune.filter_by_recursive_mdp, finetune.replan_horizon, finetune.no_optimality, finetune.no_relevance, finetune.random_selection]': [
-    [3.e-4, 100, false, true, 100, true, false, false],
-    [3.e-4, 100, false, true, 100, false, true, false],
-    [3.e-4, 100, false, true, 100, false, false, true],
+  '[finetune.lr, finetune.num_steps, env_name, agent.agent_name, agent.actor_loss, finetune.actor_loss, agent.alpha, agent.actor_p_randomgoal, agent.actor_p_trajgoal]': [
+    [3.e-5, 200, antmaze-medium-stitch-v0, gciql, ddpgbc, ddpgbc, 0.3, 0.5, 0.5],
+    [3.e-4, 200, pointmaze-medium-stitch-v0, gciql, ddpgbc, ddpgbc, 0.003, 0.5, 0.5],
+  ]
+
+  '[finetune.filter_by_mc, finetune.filter_by_recursive_mdp, finetune.replan_horizon, finetune.no_optimality, finetune.no_relevance, finetune.random_selection]': [
+    [false, true, 100, true, false, false],
+    [false, true, 100, false, true, false],
+    [false, true, 100, false, false, true],
   ]
 
   seed: [0, 1, 2]
