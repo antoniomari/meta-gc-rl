@@ -1,4 +1,4 @@
-name:  &job_name antmaze-all
+name:  &job_name size-lr-ablation
 results_dir: /fast/malbaba/results/offline_finetuning
 git_branch: main
 git_commit: null
@@ -24,12 +24,6 @@ grid:
   eval_episodes: 3
   '[env_name, agent.agent_name, agent.actor_loss, finetune.actor_loss, agent.alpha, agent.actor_p_randomgoal, agent.actor_p_trajgoal]': [
     [antmaze-medium-stitch-v0, gciql, ddpgbc, ddpgbc, 0.3, 0.5, 0.5],
-    [antmaze-medium-navigate-v0, gciql, ddpgbc, ddpgbc, 0.3, 0.0, 1.0],
-    [antmaze-medium-stitch-v0, gciql, awr, awr, 0.3, 0.5, 0.5],
-    [antmaze-medium-navigate-v0, gciql, awr, awr, 0.3, 0.0, 1.0],
-    [antmaze-medium-stitch-v0, gciql, bc, bc, 0.3, 0.0, 1.0], # 0.3 is default alpha for GCIQL
-    [antmaze-medium-navigate-v0, gciql, bc, bc, 0.3, 0.0, 1.0], # 0.3 is default alpha for GCIQL
-
   ]
 
   agent.high_alpha: 3.0
@@ -50,35 +44,19 @@ grid:
   finetune.max_steps: 15
   finetune.min_steps: 10
   finetune.mc_similarity_threshold: 1.0
+  # agent.lr: 3e-3, 3e-5
+  agent.lr: [3.e-3, 3.e-5]
+
+  '[agent.actor_hidden_dims, agent.value_hidden_dims]': [
+    [[512, 512, 512], [512, 512, 512]],
+    [[624, 624, 624], [624, 624, 624]], # 
+    [[732, 732, 732], [732, 732, 732]],
+    [[992, 992, 992], [992, 992, 992]],
+    [[1332, 1332, 1332], [1332, 1332, 1332]]
+  ]
 
   '[finetune.lr, finetune.num_steps, finetune.filter_by_mc, finetune.filter_by_recursive_mdp, finetune.replan_horizon]': [
     [0, 0, false, false, 100],
-    [3.e-4, 50, true, false, 100],
-    [3.e-4, 50, true, false, 200],
-    [3.e-5, 50, true, false, 100],
-    [3.e-5, 50, true, false, 200],
-    [3.e-4, 100, true, false, 100],
-    [3.e-4, 100, true, false, 200],
-    [3.e-5, 100, true, false, 100],
-    [3.e-5, 100, true, false, 200],
-    [3.e-4, 200, true, false, 100],
-    [3.e-4, 200, true, false, 200],
-    [3.e-5, 200, true, false, 100],
-    [3.e-5, 200, true, false, 200],
-    [3.e-4, 50, false, true, 100],
-    [3.e-4, 50, false, true, 200],
-    [3.e-5, 50, false, true, 100],
-    [3.e-5, 50, false, true, 200],
-    [3.e-4, 100, false, true, 100],
-    [3.e-4, 100, false, true, 200],
-    [3.e-5, 100, false, true, 100],
-    [3.e-5, 100, false, true, 200],
-    [3.e-4, 200, false, true, 100],
-    [3.e-4, 200, false, true, 200],
-    [3.e-5, 200, false, true, 100],
-    [3.e-5, 200, false, true, 200],
   ]
 
-  #seed: [0, 1, 2]
-  seed: [3,4]
-
+  seed: [0, 1, 2]

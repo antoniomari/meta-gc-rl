@@ -83,7 +83,8 @@ def extract_cube_positions_from_full_obs(observation_array, proprio_dim, num_cub
         return np.concatenate(positions_list, axis=-1)
 
 
-def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist=None, start_to_state_dist=None):
+def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist=None, start_to_state_dist=None,
+                            _start_values=None, _values=None):
     """
     GC-TTT with critic: find "optimal trajectories" and stitch them together
     - trajectories with high Monte-Carlo returns
@@ -111,6 +112,7 @@ def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to
     non_optimality = finetune_kwargs.get('no_optimality', False) # if true we only sample transitions close to the state regardless of whether they are any good
     non_relevance = finetune_kwargs.get('no_relevance', False) # if true we sample transitions from the buffer that are good under the optimality criterion but may be from anywhere over the state space (not necessarily close to our agents state)
     cube_env = finetune_kwargs.get('cube_env', False) 
+    visual_env = finetune_kwargs.get('visual_env', False) # if true we use visual env logic for selecting subgoals
 
     # --- Start NaN Handling ---
     if state_to_goal_dist is not None:
@@ -149,7 +151,13 @@ def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to
         if non_relevance:
             # If non-relevance is enabled, we sample transitions from the buffer that are good under the optimality criterion but may be from anywhere over the state space (not necessarily close to our agent's state)
             start_matches = jnp.sqrt(jnp.sum((_obs[..., :2] - obs[:2])**2, axis=-1)) < 10000.0
-    
+
+    if visual_env:
+        goal_value_threshold = np.quantile(_values, 0.9) # e.g., top 10% of values
+        start_value_threshold = np.quantile(_start_values, 0.9) # e.g., top 10% of values
+        # start_matches are the ones that are close to the current state and have high value
+        start_matches = (_start_values >= start_value_threshold)
+
     else: 
         # Original maze logic
         # obs is 1D, _obs_reshaped is (num_episodes, ep_len, feature_dim)
@@ -205,6 +213,7 @@ def filter_from_state_goal(dataset, obs, goal, quantile, slack, sim_threshold, f
     if cube_env:
         proprio_dim = finetune_kwargs['proprio_dim']
         num_cubes = finetune_kwargs['num_cubes']
+    visual_env = finetune_kwargs.get('visual_env', False) # if true we use visual env logic for selecting subgoals
 
     _obs = dataset['observations']
     ep_id = dataset['terminals'].cumsum() // 2
@@ -552,6 +561,7 @@ class GCDataset:
         mc_slack = finetune_kwargs['mc_slack']
         mc_similarity_threshold = finetune_kwargs['mc_similarity_threshold']
         max_len = np.inf
+        visual_env = finetune_kwargs.get('visual_env', False) # if true we use visual env logic for selecting subgoals
 
         # GC-TTT without critic: only find "optimal trajectories", no stitching
         # - trajectories with high Monte-Carlo returns
@@ -591,13 +601,15 @@ class GCDataset:
             state_to_goal_dist = (jnp.log((_values/(1/(1 - 0.99)) + 1)) / jnp.log(0.99))
             _start_values = jnp.concatenate(_start_values, 0)
             start_to_state_dist = (jnp.log((_start_values/(1/(1 - 0.99)) + 1)) / jnp.log(0.99))
+            
             #td_filter = filter_by_recursive_mdp(self.dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist, start_to_state_dist)
-            td_filter, max_len = filter_by_recursive_mdp(self.dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist, start_to_state_dist)
+            td_filter, max_len = filter_by_recursive_mdp(self.dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist, start_to_state_dist,
+                                                         _start_values, _values)
             _filter = _filter * td_filter 
 
         
         # Simple visualization of the filter for 2D environments
-        if log_filter:
+        if log_filter and not visual_env:
             import matplotlib.pyplot as plt
             import io
             import wandb

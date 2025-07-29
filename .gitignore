@@ -13,6 +13,9 @@ logs/
 scripts/
 old/
 analysis/
+analysis_neurips/
+grids_neurips/
 
 # Ignore specific files
 create.py
+utils/download_data.py

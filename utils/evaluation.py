@@ -122,7 +122,9 @@ def evaluate(
                 plt.close()
         
         # Plotting values and actions before fine-tuning
-        make_plots('pre', finetune_config.get('saw', False))
+        visual_env = current_finetune_config.get('visual_env', False)
+        if not visual_env:
+            make_plots('pre', finetune_config.get('saw', False))
 
         finetune_stats = defaultdict(list)
         recursive_mdp = finetune_config.get('filter_by_recursive_mdp', False)
@@ -195,23 +197,25 @@ def evaluate(
                         add_to(finetune_stats, flatten(update_info))
                     
                     # Log the filter after fine-tuning, also show the cuurent state of the agent as red
-                    import wandb
-                    import matplotlib.pyplot as plt
-                    import io
-                    from PIL import Image
-                    _obs = train_dataset.dataset['observations']  # assuming dataset is available here
-                    filtered_pbs = _obs[_filter.astype(bool)]
-                    buf = io.BytesIO()
-                    plt.scatter(_obs[:5000, 0], _obs[:5000,1])
-                    plt.scatter(filtered_pbs[:, 0], filtered_pbs[:, 1], alpha=0.5)
-                    plt.scatter(observation[0], observation[1], color='red', s=50)
-                    plt.savefig(buf, format='png')
-                    plt.close()
-                    buf.seek(0)
-                    img = Image.open(buf)
-                    img_array = np.array(img)
-                    wandb.log({'ZFilter_Partial': wandb.Image(img_array)})
-                    del img, img_array, buf
+                    visual_env = current_finetune_config.get('visual_env', False)
+                    if not visual_env:
+                        import wandb
+                        import matplotlib.pyplot as plt
+                        import io
+                        from PIL import Image
+                        _obs = train_dataset.dataset['observations']  # assuming dataset is available here
+                        filtered_pbs = _obs[_filter.astype(bool)]
+                        buf = io.BytesIO()
+                        plt.scatter(_obs[:5000, 0], _obs[:5000,1])
+                        plt.scatter(filtered_pbs[:, 0], filtered_pbs[:, 1], alpha=0.5)
+                        plt.scatter(observation[0], observation[1], color='red', s=50)
+                        plt.savefig(buf, format='png')
+                        plt.close()
+                        buf.seek(0)
+                        img = Image.open(buf)
+                        img_array = np.array(img)
+                        wandb.log({'ZFilter_Partial': wandb.Image(img_array)})
+                        del img, img_array, buf
 
                     import matplotlib.pyplot as plt
                 
@@ -268,22 +272,24 @@ def evaluate(
                 import wandb
                 wandb.log({'Z_NumberOfFineTunePoints': numberofallfiltered})
 
-                # Now log the aggregated filter.
-                import matplotlib.pyplot as plt
-                import io
-                from PIL import Image
-                _obs = train_dataset.dataset['observations']  # assuming dataset is available here
-                filtered_pbs = _obs[combined_filter.astype(bool)]
-                buf = io.BytesIO()
-                plt.scatter(_obs[:5000, 0], _obs[:5000, 1])
-                plt.scatter(filtered_pbs[:, 0], filtered_pbs[:, 1], alpha=0.5)
-                plt.savefig(buf, format='png')
-                plt.close()
-                buf.seek(0)
-                img = Image.open(buf)
-                img_array = np.array(img)
-                wandb.log({'ZFilter': wandb.Image(img_array)})
-                del img, img_array, buf
+                visual_env = current_finetune_config.get('visual_env', False)
+                if not visual_env:
+                    # Now log the aggregated filter.
+                    import matplotlib.pyplot as plt
+                    import io
+                    from PIL import Image
+                    _obs = train_dataset.dataset['observations']  # assuming dataset is available here
+                    filtered_pbs = _obs[combined_filter.astype(bool)]
+                    buf = io.BytesIO()
+                    plt.scatter(_obs[:5000, 0], _obs[:5000, 1])
+                    plt.scatter(filtered_pbs[:, 0], filtered_pbs[:, 1], alpha=0.5)
+                    plt.savefig(buf, format='png')
+                    plt.close()
+                    buf.seek(0)
+                    img = Image.open(buf)
+                    img_array = np.array(img)
+                    wandb.log({'ZFilter': wandb.Image(img_array)})
+                    del img, img_array, buf
             del aggregated_filters
             import gc
             gc.collect()
@@ -293,7 +299,9 @@ def evaluate(
                 trajs.append(traj)
             else:
                 renders.append(np.array(render))
-            make_plots('post', finetune_config.get('saw', False))
+            visual_env = current_finetune_config.get('visual_env', False)
+            if not visual_env:
+                make_plots('post', finetune_config.get('saw', False))
 
         # GC-TTT without critic
         else:
@@ -353,7 +361,9 @@ def evaluate(
                     add_to(finetune_stats, flatten(info))
 
             # Plotting values and actions after fine-tuning
-            make_plots('post', finetune_config.get('saw', False))
+            visual_env = current_finetune_config.get('visual_env', False)
+            if not visual_env:
+                make_plots('post', finetune_config.get('saw', False))
 
             actor_fn = supply_rng(agent.sample_actions, rng=jax.random.PRNGKey(np.random.randint(0, 2**32)))
 
