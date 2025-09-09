@@ -14,7 +14,9 @@ class AgentConfig:
     Attributes:
         agent_name: Identifier of the agent to run (e.g., 'gciql', 'gcbc').
     """
+
     agent_name: str = "gciql"
+    actor_loss: str = "bc"
 
 
 @dataclass
@@ -42,6 +44,7 @@ class FinetuneConfig:
         min_steps: Minimum number of fine-tuning steps to perform.
         replan_horizon: Horizon for replanning during fine-tuning.
     """
+
     ratio: float = 0.5
     num_steps: int = 0
     lr: float = 3e-5
@@ -62,6 +65,18 @@ class FinetuneConfig:
     min_steps: int = 10
     replan_horizon: int = 100
 
+    def __getitem__(self, key):
+        """Make the config subscriptable like a dictionary."""
+        return getattr(self, key)
+
+    def __setitem__(self, key, value):
+        """Allow setting attributes like a dictionary."""
+        setattr(self, key, value)
+
+    def get(self, key, default=None):
+        """Provide dictionary-like get method."""
+        return getattr(self, key, default)
+
 
 @dataclass
 class GCTTTConfig:
@@ -71,6 +86,7 @@ class GCTTTConfig:
     optional checkpoints, agent and fine-tuning sub-configs, and evaluation
     controls (frequency, tasks, and device hints).
     """
+
     run_group: str = "debug"
     seed: int = 0
     env_name: str = "pointmaze-medium-navigate-v0"

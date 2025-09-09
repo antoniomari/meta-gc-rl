@@ -245,12 +245,12 @@ class MetaTrainState(flax.struct.PyTreeNode):
         return self.replace(
             step=self.step + 1,
             params=new_params,
-            old_params
+            old_params=self.old_params,
             opt_state=new_opt_state,
             **kwargs,
         )
 
-    def apply_loss_fn(self, loss_fn, use_old_params: bool = False) -> :
+    def apply_loss_fn(self, loss_fn, use_old_params: bool = False):
         """Apply the loss function and return the gradients and info.
 
         It additionally computes the gradient statistics and adds them to the dictionary.

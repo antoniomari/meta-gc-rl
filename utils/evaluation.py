@@ -13,6 +13,8 @@ from PIL import Image
 from utils.datasets import GCDataset
 from agents.gcagent import GCAgent
 from typing import Dict
+from dataclasses import asdict
+
 
 def supply_rng(f, rng=jax.random.PRNGKey(0)):
     """Helper function to split the random number generator key before each call to the function."""
@@ -110,21 +112,28 @@ def make_plots(train_dataset, agent, goal, suffix, is_saw):
 def copy_current_agent(agent: GCAgent, finetune_config: FinetuneConfig) -> GCAgent:
 
     old_config = agent.config
-    new_config = agent.config.unfreeze()
+
+    # Create a copy of the original config to preserve its type
+    if hasattr(agent.config, "unfreeze"):
+        new_config = agent.config.unfreeze()
+    else:
+        new_config = copy.deepcopy(agent.config)
+
+    # Update specific fields from finetune_config
     if actor_loss_val := _cfg_get(finetune_config, "actor_loss", None) is not None:
         new_config["actor_loss"] = actor_loss_val
     if alpha_val := _cfg_get(finetune_config, "alpha", None) is not None:
         new_config["alpha"] = alpha_val
-    new_config = old_config.__class__(new_config)  # Why is this necessary?
     old_train_state = copy.deepcopy(agent.network)
     opt_state = agent.network.opt_state
     finetune_tx = optax.adam(learning_rate=_cfg_get(finetune_config, "lr"))
+
     agent = agent.replace(
         network=agent.network.replace(tx=finetune_tx, opt_state=opt_state),
         config=new_config,
     )
 
-    return agent
+    return agent, old_train_state, old_config
 
 
 def make_current_config(finetune_config: FinetuneConfig) -> FinetuneConfig:
@@ -146,9 +155,7 @@ def make_current_config(finetune_config: FinetuneConfig) -> FinetuneConfig:
             env.observation_space.shape[0] - num_cubes * 9
         )
         try:
-            current_finetune_config["goal_is_oracle_rep"] = (
-                env._use_oracle_rep
-            )
+            current_finetune_config["goal_is_oracle_rep"] = env._use_oracle_rep
         except Exception as e:
             # print(f"Error accessing _use_oracle_rep: {e}")
             current_finetune_config["goal_is_oracle_rep"] = False
@@ -162,7 +169,7 @@ def actor_step(
     env,
     config: Dict,
     goal,
-    eval_gaussian = None,
+    eval_gaussian=None,
     eval_temperature: float = 0.0,
 ):
     action = actor_fn(
@@ -185,9 +192,8 @@ def gc_ttt_critic(
     config: Dict,
     finetune_config: FinetuneConfig,
     goal,
-    eval_gaussian = None,
+    eval_gaussian=None,
     eval_temperature: float = 0.0,
-
 ):
 
     done = False
@@ -206,11 +212,11 @@ def gc_ttt_critic(
     # Replanning loop: repeatedly fine-tune and execute a short horizon.
     while not done:
         # Active test-time fine-tuning:
-        if old_train_state is not None: # Replace the agent with the base one
+        if old_train_state is not None:  # Replace the agent with the base one
             agent = agent.replace(network=old_train_state, config=old_config)
 
         # Copy config, state and optimizer state of the agent
-        agent = copy_current_agent(agent, finetune_config)
+        agent, old_train_state, old_config = copy_current_agent(agent, finetune_config)
 
         # New finetuning config?
         finetune_stats = defaultdict(list)
@@ -219,7 +225,9 @@ def gc_ttt_critic(
         else:
             current_finetune_config = dict(finetune_config)
 
-        if current_finetune_config.get("cube_env", False):  # A way to detect CubeEnv, or use env.spec.id
+        if current_finetune_config.get(
+            "cube_env", False
+        ):  # A way to detect CubeEnv, or use env.spec.id
             # env._num_cubes should be available if 'env' is an instance of your CubeEnv
             num_cubes = (
                 env._num_cubes if hasattr(env, "_num_cubes") else 1
@@ -390,15 +398,13 @@ def gc_ttt_critic_free(
     goal_frame,
     should_render: bool,
     video_frame_skip,
-    eval_gaussian = None,
+    eval_gaussian=None,
     eval_temperature: float = 0.0,
 ):
     # GC-TTT without critic
     traj = defaultdict(list)
+    finetune_stats = defaultdict(list)
     info = None
-
-    # Prepare fine-tuning
-    agent = copy_current_agent(agent, finetune_config)
 
     if _cfg_get(finetune_config, "num_steps", 0):
 
@@ -443,7 +449,9 @@ def gc_ttt_critic_free(
     step = 0
     render = []
     while not done:
-        next_observation, action, reward, terminated, truncated, info = actor_step(actor_fn, observation, env, config, goal, eval_gaussian, eval_temperature)
+        next_observation, action, reward, terminated, truncated, info = actor_step(
+            actor_fn, observation, env, config, goal, eval_gaussian, eval_temperature
+        )
         step += 1
         done = terminated or truncated or step >= 3000
 
@@ -503,7 +511,6 @@ def evaluate(
     trajs = []
     stats = defaultdict(list)
 
-
     renders = []
     for i in trange(num_eval_episodes + num_video_episodes):
 
@@ -527,7 +534,6 @@ def evaluate(
             # make_plots(train_dataset, agent, goal, "pre", _cfg_get(finetune_config, "saw", False))
             pass
 
-        finetune_stats = defaultdict(list)
         recursive_mdp = _cfg_get(finetune_config, "filter_by_recursive_mdp", False)
 
         if recursive_mdp:
@@ -541,9 +547,10 @@ def evaluate(
                 finetune_config,
                 goal,
                 eval_gaussian,
-                eval_temperature
+                eval_temperature,
             )
         else:
+            agent, old_train_state, old_config = copy_current_agent(agent, finetune_config)
             traj, info, finetune_stats, render = gc_ttt_critic_free(
                 train_dataset,
                 agent,
@@ -556,7 +563,7 @@ def evaluate(
                 should_render,
                 video_frame_skip,
                 eval_gaussian,
-                eval_temperature
+                eval_temperature,
             )
 
             if i < num_eval_episodes:

@@ -4,6 +4,7 @@ agent:
   - 512
   - 512
   - 512
+  actor_loss: bc
   actor_p_curgoal: 0.0
   actor_p_randomgoal: 0.0
   actor_p_trajgoal: 1.0

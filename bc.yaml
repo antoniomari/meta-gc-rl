@@ -7,9 +7,9 @@ restore_path: null
 restore_epoch: null
 
 agent:
-  agent_name: gciql
+  agent_name: gcbc
   actor_loss: bc
-  
+
 # Hyperparameters specific to test-time fine-tuning
 finetune:
   ratio: 0.5           # ratio of fine-tuning data to be selected actively
