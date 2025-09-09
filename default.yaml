@@ -1,0 +1,47 @@
+run_group: debug
+seed: 0
+env_name: pointmaze-medium-navigate-v0  # pointmaze-medium-navigate-v0
+data_ratio: 1.0
+working_dir: exp
+restore_path: null
+restore_epoch: null
+
+agent:
+  agent_name: gciql
+  actor_loss: ddpgbc
+
+# Hyperparameters specific to test-time fine-tuning
+finetune:
+  ratio: 0.5           # ratio of fine-tuning data to be selected actively
+  num_steps: 0        # number of fine-tunining gradient steps per episode
+  lr: 3.e-5            # fine-tuning learning rate
+  actor_loss: ddpgbc     # overrides agent.actor_loss for fine-tuning
+  alpha: null          # overrides agent.alpha for fine-tuning
+  batch_size: 1024     # fine-tuning batch size
+  fix_actor_goal: 0.0  # how often the actor goal should be set to the evaluation goal
+  mc_quantile: 0.2     # quantile for filtering "good" demonstrations
+  mc_slack: 5          # padding for selected trajectories
+  sorb_len: 10         # number of subgoals for off-policy GCFT
+  filter_by_mc: false  # enables on-policy GCFT
+  filter_by_td: false  # enables off-policy GCFT
+  relevance_by_value: false  # replaces the reward-based relevance criterion with a value-based one
+  saw: false
+  reset_after_horizon: false  # resets the agent after the replan horizon is reached
+  mc_similarity_threshold: 1.0  # added
+  filter_by_recursive_mdp: false  # added
+  min_steps: 10 # added
+  replan_horizon: 100 # or 200 (added)
+
+train_steps: 1000000
+log_interval: 5000
+eval_interval: 100000 # old 100000
+save_interval: 100000
+eval_start: 800000  # Old: 800000
+
+eval_tasks: null
+eval_episodes: 50
+eval_temperature: 0
+eval_gaussian: null
+video_episodes: 0
+video_frame_skip: 3
+eval_on_cpu: 1

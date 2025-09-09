@@ -10,8 +10,9 @@ from utils.encoders import GCEncoder, encoder_modules
 from utils.flax_utils import ModuleDict, TrainState, nonpytree_field
 from utils.networks import MLP, GCActor, GCDiscreteActor, GCValue, Identity, LengthNormalize
 from functools import partial # Import partial
+from agents.gcagent import GCAgent
 
-class HIQLAgent(flax.struct.PyTreeNode):
+class HIQLAgent(GCAgent):
     """Hierarchical implicit Q-learning (HIQL) agent."""
 
     rng: Any
@@ -71,7 +72,7 @@ class HIQLAgent(flax.struct.PyTreeNode):
         if 'low_actor_goal_reps_finetune' in batch: # This check is fine if 'finetuning' is static for update
             goal_reps = batch['low_actor_goal_reps_finetune']
             # The stop_gradient was moved to the `update` method, which is cleaner.
-        else: 
+        else:
             # Compute the goal representations of the subgoals.
             goal_reps = self.network.select('goal_rep')(
                 jnp.concatenate([batch['observations'], batch['low_actor_goals']], axis=-1),
@@ -168,13 +169,13 @@ class HIQLAgent(flax.struct.PyTreeNode):
         # # goal_reps = high_dist.sample(seed=high_seed)
         # # goal_reps = goal_reps / jnp.linalg.norm(goal_reps, axis=-1, keepdims=True) * jnp.sqrt(goal_reps.shape[-1])
         #rng_for_next_state, rng_for_sample, rng_for_loss = jax.random.split(self.rng, 3)
-    
+
         batch_for_loss = batch # Start with the original batch
         if finetuning:
             high_dist = self.network.select('high_actor')(batch['observations'], batch['high_actor_goals'])
-            goal_reps = high_dist.sample(seed=new_rng) 
+            goal_reps = high_dist.sample(seed=new_rng)
             goal_reps = goal_reps / jnp.linalg.norm(goal_reps, axis=-1, keepdims=True) * jnp.sqrt(goal_reps.shape[-1])
-            
+
             # Make batch mutable to add the new key
             mutable_batch = dict(batch) # Create a shallow copy
             mutable_batch['low_actor_goal_reps_finetune'] = goal_reps

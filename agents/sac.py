@@ -8,9 +8,9 @@ import ml_collections
 import optax
 from utils.flax_utils import ModuleDict, TrainState, nonpytree_field
 from utils.networks import GCActor, GCValue, LogParam
+from agents.gcagent import GCAgent
 
-
-class SACAgent(flax.struct.PyTreeNode):
+class SACAgent(GCAgent):
     """Soft actor-critic (SAC) agent."""
 
     rng: Any

@@ -9,9 +9,9 @@ import optax
 from utils.encoders import GCEncoder, encoder_modules
 from utils.flax_utils import ModuleDict, TrainState, nonpytree_field
 from utils.networks import GCActor, GCDiscreteActor, GCValue
+from agents.gcagent import GCAgent
 
-
-class GCIVLAgent(flax.struct.PyTreeNode):
+class GCIVLAgent(GCAgent):
     """Goal-conditioned implicit V-learning (GCIVL) agent.
 
     This is a variant of GCIQL that only uses a V function, without Q functions.

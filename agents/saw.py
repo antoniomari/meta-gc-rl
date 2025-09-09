@@ -10,9 +10,9 @@ import optax
 from utils.encoders import GCEncoder, encoder_modules
 from utils.flax_utils import ModuleDict, TrainState, nonpytree_field
 from utils.networks import MLP, Identity, LengthNormalize, GCActor, GCDiscreteActor, GCDiscreteCritic, GCValue
+from agents.gcagent import GCAgent
 
-
-class SAWAgent(flax.struct.PyTreeNode):
+class SAWAgent(GCAgent):
     """Subgoal Advantage-Weighted (SAW) Policy Bootstrapping agent."""
 
     rng: Any

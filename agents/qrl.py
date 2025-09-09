@@ -9,9 +9,9 @@ import optax
 from utils.encoders import GCEncoder, encoder_modules
 from utils.flax_utils import ModuleDict, TrainState, nonpytree_field
 from utils.networks import MLP, GCActor, GCDiscreteActor, GCIQEValue, GCMRNValue, LogParam
+from agents.gcagent import GCAgent
 
-
-class QRLAgent(flax.struct.PyTreeNode):
+class QRLAgent(GCAgent):
     """Quasimetric RL (QRL) agent.
 
     This implementation supports the following variants:

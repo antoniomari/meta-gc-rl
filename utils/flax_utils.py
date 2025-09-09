@@ -119,6 +119,8 @@ class TrainState(flax.struct.PyTreeNode):
 
     def apply_gradients(self, grads, **kwargs):
         """Apply the gradients and return the updated state."""
+
+        # self.tx is the optimizer (Adam) -> update params using grads and opt_state
         updates, new_opt_state = self.tx.update(grads, self.opt_state, self.params)
         new_params = optax.apply_updates(self.params, updates)
 
@@ -134,6 +136,8 @@ class TrainState(flax.struct.PyTreeNode):
 
         It additionally computes the gradient statistics and adds them to the dictionary.
         """
+
+        # Compute gradients
         grads, info = jax.grad(loss_fn, has_aux=True)(self.params)
 
         grad_max = jax.tree_util.tree_map(jnp.max, grads)
@@ -157,6 +161,129 @@ class TrainState(flax.struct.PyTreeNode):
         )
 
         return self.apply_gradients(grads=grads), info
+
+
+class MetaTrainState(flax.struct.PyTreeNode):
+    """Custom train state for models.
+
+    Attributes:
+        step: Counter to keep track of the training steps. It is incremented by 1 after each `apply_gradients` call.
+        apply_fn: Apply function of the model.
+        model_def: Model definition.
+        params: Parameters of the model.
+        tx: optax optimizer.
+        opt_state: Optimizer state.
+    """
+
+    step: int
+    apply_fn: Any = nonpytree_field()
+    model_def: Any = nonpytree_field()
+    params: Any
+    old_params: Any
+    tx: Any = nonpytree_field()
+    opt_state: Any
+
+    @classmethod
+    def create(cls, model_def, params, tx=None, **kwargs):
+        """Create a new train state."""
+        if tx is not None:
+            opt_state = tx.init(params)
+        else:
+            opt_state = None
+
+        return cls(
+            step=1,
+            apply_fn=model_def.apply,
+            model_def=model_def,
+            params=params,
+            old_params=params,
+            tx=tx,
+            opt_state=opt_state,
+            **kwargs,
+        )
+
+    def __call__(self, *args, params=None, method=None, **kwargs):
+        """Forward pass.
+
+        When `params` is not provided, it uses the stored parameters.
+
+        The typical use case is to set `params` to `None` when you want to *stop* the gradients, and to pass the current
+        traced parameters when you want to flow the gradients. In other words, the default behavior is to stop the
+        gradients, and you need to explicitly provide the parameters to flow the gradients.
+
+        Args:
+            *args: Arguments to pass to the model.
+            params: Parameters to use for the forward pass. If `None`, it uses the stored parameters, without flowing
+                the gradients.
+            method: Method to call in the model. If `None`, it uses the default `apply` method.
+            **kwargs: Keyword arguments to pass to the model.
+        """
+        if params is None:
+            params = self.params
+        variables = {'params': params}
+        if method is not None:
+            method_name = getattr(self.model_def, method)
+        else:
+            method_name = None
+
+        return self.apply_fn(variables, *args, method=method_name, **kwargs)
+
+    def select(self, name):
+        """Helper function to select a module from a `ModuleDict`."""
+        return functools.partial(self, name=name)
+
+    def apply_gradients(self, grads, use_old_params: bool = False, **kwargs):
+        """Apply the gradients and return the updated state."""
+
+        # self.tx is the optimizer (Adam) -> update params using grads and opt_state
+        if use_old_params:
+            updates, new_opt_state = self.tx.update(grads, self.opt_state, self.old_params)
+        else:
+            updates, new_opt_state = self.tx.update(grads, self.opt_state, self.params)
+        new_params = optax.apply_updates(self.params, updates)
+
+        return self.replace(
+            step=self.step + 1,
+            params=new_params,
+            old_params
+            opt_state=new_opt_state,
+            **kwargs,
+        )
+
+    def apply_loss_fn(self, loss_fn, use_old_params: bool = False) -> :
+        """Apply the loss function and return the gradients and info.
+
+        It additionally computes the gradient statistics and adds them to the dictionary.
+        """
+
+        # Compute gradients
+        if use_old_params:
+            grads, info = jax.grad(loss_fn, has_aux=True)(self.old_params)
+        else:
+            grads, info = jax.grad(loss_fn, has_aux=True)(self.params)
+
+
+        grad_max = jax.tree_util.tree_map(jnp.max, grads)
+        grad_min = jax.tree_util.tree_map(jnp.min, grads)
+        grad_norm = jax.tree_util.tree_map(jnp.linalg.norm, grads)
+
+        grad_max_flat = jnp.concatenate([jnp.reshape(x, -1) for x in jax.tree_util.tree_leaves(grad_max)], axis=0)
+        grad_min_flat = jnp.concatenate([jnp.reshape(x, -1) for x in jax.tree_util.tree_leaves(grad_min)], axis=0)
+        grad_norm_flat = jnp.concatenate([jnp.reshape(x, -1) for x in jax.tree_util.tree_leaves(grad_norm)], axis=0)
+
+        final_grad_max = jnp.max(grad_max_flat)
+        final_grad_min = jnp.min(grad_min_flat)
+        final_grad_norm = jnp.linalg.norm(grad_norm_flat, ord=1)
+
+        info.update(
+            {
+                'grad/max': final_grad_max,
+                'grad/min': final_grad_min,
+                'grad/norm': final_grad_norm,
+            }
+        )
+
+        return grads, info
 
 
 def save_agent(agent, save_dir, epoch):

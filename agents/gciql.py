@@ -9,9 +9,10 @@ import optax
 from utils.encoders import GCEncoder, encoder_modules
 from utils.flax_utils import ModuleDict, TrainState, nonpytree_field
 from utils.networks import GCActor, GCDiscreteActor, GCDiscreteCritic, GCValue
+from agents.gcagent import GCAgent
 
 
-class GCIQLAgent(flax.struct.PyTreeNode):
+class GCIQLAgent(GCAgent):
     """Goal-conditioned implicit Q-learning (GCIQL) agent.
 
     This implementation supports both AWR (actor_loss='awr') and DDPG+BC (actor_loss='ddpgbc') for the actor loss.

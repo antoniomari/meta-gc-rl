@@ -1,0 +1,63 @@
+agent:
+  actor_geom_sample: false
+  actor_hidden_dims: !!python/tuple
+  - 512
+  - 512
+  - 512
+  actor_p_curgoal: 0.0
+  actor_p_randomgoal: 0.0
+  actor_p_trajgoal: 1.0
+  agent_name: gcbc
+  batch_size: 1024
+  const_std: true
+  dataset_class: GCDataset
+  discount: 0.99
+  discrete: false
+  encoder: null
+  frame_stack: null
+  gc_negative: true
+  lr: 0.0003
+  p_aug: 0.0
+  value_geom_sample: false
+  value_p_curgoal: 0.0
+  value_p_randomgoal: 0.0
+  value_p_trajgoal: 1.0
+data_ratio: 1.0
+env_name: pointmaze-medium-navigate-v0
+eval_episodes: 50
+eval_gaussian: null
+eval_interval: 100000
+eval_on_cpu: 1
+eval_start: 800000
+eval_tasks: null
+eval_temperature: 0.0
+finetune:
+  actor_loss: bc
+  alpha: null
+  batch_size: 1024
+  filter_by_mc: false
+  filter_by_recursive_mdp: false
+  filter_by_td: false
+  fix_actor_goal: 0.0
+  lr: 3.0e-05
+  mc_quantile: 0.2
+  mc_similarity_threshold: 1.0
+  mc_slack: 5
+  min_steps: 10
+  num_steps: 0
+  ratio: 0.5
+  relevance_by_value: false
+  replan_horizon: 100
+  reset_after_horizon: false
+  saw: false
+  sorb_len: 10
+log_interval: 5000
+restore_epoch: null
+restore_path: null
+run_group: debug
+save_interval: 100000
+seed: 0
+train_steps: 1000000
+video_episodes: 0
+video_frame_skip: 3
+working_dir: exp/bc

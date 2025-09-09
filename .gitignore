@@ -19,3 +19,7 @@ grids_neurips/
 # Ignore specific files
 create.py
 utils/download_data.py
+
+
+# Virtual environment
+venv

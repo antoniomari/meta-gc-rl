@@ -8,10 +8,14 @@ import optax
 from utils.encoders import GCEncoder, encoder_modules
 from utils.flax_utils import ModuleDict, TrainState, nonpytree_field
 from utils.networks import GCActor, GCDiscreteActor
+from agents.gcagent import GCAgent
 
 
-class GCBCAgent(flax.struct.PyTreeNode):
+class GCBCAgent(GCAgent):
     """Goal-conditioned behavioral cloning (GCBC) agent."""
+    # NOTE: flax.struct.PyTreeNode is turned into a frozen dataclass like Flax struct
+    # - attributes declared in the class body are instance fields
+    # - nonpytree_field() is a Flax helper marks a field as non-pytree (excluded from JAX transformations/trees)
 
     rng: Any
     network: Any
@@ -31,14 +35,16 @@ class GCBCAgent(flax.struct.PyTreeNode):
         if not self.config['discrete']:
             actor_info.update(
                 {
+                    # policy deterministic action vs dataset action
                     'mse': jnp.mean((dist.mode() - batch['actions']) ** 2),
+                    # mean of distribution diagonal standard deviation
                     'std': jnp.mean(dist.scale_diag),
                 }
             )
 
         return actor_loss, actor_info
 
-    @jax.jit
+    @jax.jit  # mindful of arguments that must be static (e.g. shapes), recompiles if shapes change
     def total_loss(self, batch, grad_params, rng=None):
         """Compute the total loss."""
         info = {}
@@ -55,13 +61,14 @@ class GCBCAgent(flax.struct.PyTreeNode):
     @jax.jit
     def update(self, batch):
         """Update the agent and return a new agent with information dictionary."""
-        new_rng, rng = jax.random.split(self.rng)
+        new_rng, rng = jax.random.split(self.rng) # rng used now, new_rng for next step
 
         def loss_fn(grad_params):
             return self.total_loss(batch, grad_params, rng=rng)
 
         new_network, info = self.network.apply_loss_fn(loss_fn=loss_fn)
 
+        # Return a new immutable agent with updated network and PRNG + metrics
         return self.replace(network=new_network, rng=new_rng), info
 
     @jax.jit
@@ -76,7 +83,7 @@ class GCBCAgent(flax.struct.PyTreeNode):
         dist = self.network.select('actor')(observations, goals, temperature=temperature)
         actions = dist.sample(seed=seed)
         if not self.config['discrete']:
-            actions = jnp.clip(actions, -1, 1)
+            actions = jnp.clip(actions, -1, 1)  # so for each dim we clip in -1, 1
         return actions
 
     @classmethod
@@ -96,6 +103,7 @@ class GCBCAgent(flax.struct.PyTreeNode):
             config: Configuration dictionary.
         """
         rng = jax.random.PRNGKey(seed)
+        # jax random splits keys deterministically, to have multiple reproducible random streams
         rng, init_rng = jax.random.split(rng, 2)
 
         ex_goals = ex_observations
@@ -134,7 +142,9 @@ class GCBCAgent(flax.struct.PyTreeNode):
 
         network_def = ModuleDict(networks)
         network_tx = optax.adam(learning_rate=config['lr'])
+        # init + dummy forward pass, returns PyTree?
         network_params = network_def.init(init_rng, **network_args)['params']
+        # wrapper -> tracks params and optimizer state, to pass to update steps
         network = TrainState.create(network_def, network_params, tx=network_tx)
 
         return cls(rng, network=network, config=flax.core.FrozenDict(**config))

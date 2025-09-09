@@ -6,7 +6,6 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from flax.core.frozen_dict import FrozenDict
-import rustworkx as rx
 from heapq import heappop, heappush
 
 
@@ -70,7 +69,7 @@ def extract_cube_positions_from_full_obs(observation_array, proprio_dim, num_cub
     positions_list = []
     for i in range(num_cubes):
         start_idx = proprio_dim + i * state_dim_per_cube
-        
+
         if observation_array.ndim == 1: # Single observation (e.g., current `obs`)
             positions_list.append(observation_array[start_idx : start_idx + pos_dim_per_cube])
         else: # Batched observations (e.g., dataset `_obs`)
@@ -111,7 +110,7 @@ def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to
     num_selected_points  = finetune_kwargs.get('recursive_selected_num_points', 10) # number of subgoals to select
     non_optimality = finetune_kwargs.get('no_optimality', False) # if true we only sample transitions close to the state regardless of whether they are any good
     non_relevance = finetune_kwargs.get('no_relevance', False) # if true we sample transitions from the buffer that are good under the optimality criterion but may be from anywhere over the state space (not necessarily close to our agents state)
-    cube_env = finetune_kwargs.get('cube_env', False) 
+    cube_env = finetune_kwargs.get('cube_env', False)
     visual_env = finetune_kwargs.get('visual_env', False) # if true we use visual env logic for selecting subgoals
 
     # --- Start NaN Handling ---
@@ -125,7 +124,7 @@ def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to
             state_to_goal_dist_np[nan_mask] = large_value
             state_to_goal_dist = jnp.array(state_to_goal_dist_np) # Convert back to JAX array
     # --- End NaN Handling ---
-    
+
     mask = np.zeros_like(ep_id)
     _obs = _obs.reshape(-1, ep_len, _obs.shape[-1])
 
@@ -134,15 +133,15 @@ def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to
     if cube_env:
         proprio_dim = finetune_kwargs['proprio_dim']
         num_cubes = finetune_kwargs['num_cubes']
-        
+
         # Extract cube positions from current observation (obs)
         # obs is 1D array (current environment observation)
         current_obs_cube_positions = extract_cube_positions_from_full_obs(obs, proprio_dim, num_cubes)
-        
+
         # Extract cube positions from dataset observations (_obs_reshaped)
         # _obs_reshaped has shape (num_episodes, ep_len, feature_dim)
         dataset_cube_positions = extract_cube_positions_from_full_obs(_obs, proprio_dim, num_cubes)
-        
+
         # Calculate distance for start_matches
         # Resulting shape for start_matches_dist: (num_episodes, ep_len)
         start_matches_dist = jnp.sqrt(jnp.sum((dataset_cube_positions - current_obs_cube_positions)**2, axis=-1))
@@ -158,7 +157,7 @@ def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to
         # start_matches are the ones that are close to the current state and have high value
         start_matches = (_start_values >= start_value_threshold)
 
-    else: 
+    else:
         # Original maze logic
         # obs is 1D, _obs_reshaped is (num_episodes, ep_len, feature_dim)
         start_matches = jnp.sqrt(jnp.sum((_obs[..., :2] - obs[:2])**2, axis=-1)) < start_threshold
@@ -175,7 +174,7 @@ def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to
         # Shift start_matches to align with the subtrajectory minimum steps
         shift_start_matches = np.zeros_like(start_matches)
         shift_start_matches[:, subtraj_min_steps:] = start_matches[:, :-subtraj_min_steps]
-        
+
         scores = ((shift_start_matches.cumsum(-1) > 0) * state_to_goal_dist.reshape(start_matches.shape))
         scores = np.where(scores==0, scores.max(), scores)
         ep_idxs = np.argsort(scores.min(-1))[:num_selected_points]
@@ -256,14 +255,17 @@ def filter_from_state_goal(dataset, obs, goal, quantile, slack, sim_threshold, f
         # This line should now work if goal_cube_positions is correctly shaped to (num_cubes * 3,)
         goal_matches_dist = jnp.sqrt(jnp.sum((dataset_cube_positions - goal_cube_positions)**2, axis=-1))
         goal_matches = goal_matches_dist < sim_threshold
-    else: 
+    else:
         # Original maze logic
+        # TODO: check sim_threshold -> pass reward function environment here
         start_matches = jnp.sqrt(jnp.sum((_obs[..., :2] - obs[:2]) ** 2, axis=-1)) < sim_threshold
         goal_matches = jnp.sqrt(jnp.sum((_obs[..., :2] - goal[:2]) ** 2, axis=-1)) < sim_threshold
 
     # Only proceed if there are trajectories matching both start and goal
-    filtered_eps = (start_matches.sum(-1) * goal_matches.sum(-1)) > 0 
+    filtered_eps = (start_matches.sum(-1) * goal_matches.sum(-1)) > 0
     if filtered_eps.sum():
+        # NOTE: complexity of extracting these trajectories
+        # Count num of steps -> 
         # Here, we are trying to select the best subtrajectory in each matching trajectory
         goal_matches_id = np.arange(ep_len).reshape(1, -1) * goal_matches
         goal_matches_id = np.where(goal_matches_id == 0, ep_len, goal_matches_id)
@@ -277,7 +279,7 @@ def filter_from_state_goal(dataset, obs, goal, quantile, slack, sim_threshold, f
         # for each trajectory, we select the most promising candidate (highest MC return)
         solutions = np.argmin(candidates, -1)
         goal_offset = np.min(candidates, -1)
-        threshold = ep_len - 1   
+        threshold = ep_len - 1
         if (goal_offset < ep_len).sum():
             threshold = np.quantile(goal_offset[goal_offset < ep_len], quantile)
         goal_offset = np.where(goal_offset > threshold, 0, goal_offset)
@@ -552,9 +554,10 @@ class GCDataset:
 
         return {k: np.concatenate([uniform_batch[k], active_batch[k]]) for k in uniform_batch}
 
+    # NOTE: batch size here is useless
     def prepare_active_sample(self, agent, obs, goal, finetune_kwargs, batch_size=2048, exp_name = None,
                               log_filter=True):
-        
+
         _obs = self.dataset['observations']
         _filter = jnp.ones_like(self.dataset['terminals'])
         mc_quantile = finetune_kwargs['mc_quantile']
@@ -601,13 +604,13 @@ class GCDataset:
             state_to_goal_dist = (jnp.log((_values/(1/(1 - 0.99)) + 1)) / jnp.log(0.99))
             _start_values = jnp.concatenate(_start_values, 0)
             start_to_state_dist = (jnp.log((_start_values/(1/(1 - 0.99)) + 1)) / jnp.log(0.99))
-            
+
             #td_filter = filter_by_recursive_mdp(self.dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist, start_to_state_dist)
             td_filter, max_len = filter_by_recursive_mdp(self.dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist, start_to_state_dist,
                                                          _start_values, _values)
-            _filter = _filter * td_filter 
+            _filter = _filter * td_filter
 
-        
+
         # Simple visualization of the filter for 2D environments
         if log_filter and not visual_env:
             import matplotlib.pyplot as plt

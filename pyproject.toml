@@ -50,3 +50,25 @@ line-length = 120
 
 [tool.ruff.format]
 quote-style = "single"
+
+[tool.pylint.main]
+py-version = "3.11"
+ignore = ["venv", "build", "dist"]
+recursive = true
+
+[tool.pylint.'MESSAGES CONTROL']
+disable = [
+  "missing-docstring",
+  "too-few-public-methods",
+  "too-many-arguments",
+  "wrong-import-position",
+]
+
+[tool.pylint.format]
+max-line-length = 120
+
+[tool.pylint.basic]
+good-names = ["i", "j", "k", "x", "y", "ob"]
+
+[tool.pylint.design]
+max-args = 8
