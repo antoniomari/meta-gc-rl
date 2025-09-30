@@ -1,5 +1,5 @@
 from agents.crl import CRLAgent
-from agents.gcbc import GCBCAgent
+from agents.gcbc import GCBCAgent, MetaGCBCAgent
 from agents.gciql import GCIQLAgent
 from agents.gcivl import GCIVLAgent
 from agents.hiql import HIQLAgent
@@ -16,4 +16,5 @@ agents = dict(
     qrl=QRLAgent,
     sac=SACAgent,
     saw=SAWAgent,
+    meta_gcbc=MetaGCBCAgent
 )

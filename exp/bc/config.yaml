@@ -8,7 +8,7 @@ agent:
   actor_p_curgoal: 0.0
   actor_p_randomgoal: 0.0
   actor_p_trajgoal: 1.0
-  agent_name: gcbc
+  agent_name: meta_gcbc
   batch_size: 1024
   const_std: true
   dataset_class: GCDataset
@@ -28,15 +28,15 @@ env_name: pointmaze-medium-navigate-v0
 eval_episodes: 50
 eval_gaussian: null
 eval_interval: 100000
-eval_on_cpu: 1
-eval_start: 800000
+eval_on_cpu: 0
+eval_start: 0
 eval_tasks: null
 eval_temperature: 0.0
 finetune:
   actor_loss: bc
   alpha: null
   batch_size: 1024
-  filter_by_mc: false
+  filter_by_mc: true
   filter_by_recursive_mdp: false
   filter_by_td: false
   fix_actor_goal: 0.0
@@ -45,14 +45,14 @@ finetune:
   mc_similarity_threshold: 1.0
   mc_slack: 5
   min_steps: 10
-  num_steps: 0
+  num_steps: 50
   ratio: 0.5
   relevance_by_value: false
   replan_horizon: 100
   reset_after_horizon: false
   saw: false
   sorb_len: 10
-log_interval: 5000
+log_interval: 100
 restore_epoch: null
 restore_path: null
 run_group: debug

@@ -53,10 +53,10 @@ def get_exp_name(cfg):
     # finetune.replan_horizon
     # timestamp
     # seed
-    exp_name = cfg.agent.agent_name
+    exp_name = cfg.agent["agent_name"]
     env_name_split = cfg.env_name.split('-')
     exp_name += '_' + env_name_split[0] + '-' + env_name_split[2]
-    # exp_name += '_' + cfg.agent.actor_loss TODO: check
+    # exp_name += '_' + cfg.agent["actor_loss"] TODO: check
     exp_name += '_' + cfg.finetune.actor_loss
     exp_name += '_' + str(cfg.finetune.filter_by_mc)
     exp_name += '_' + str(cfg.finetune.mc_quantile)
@@ -65,6 +65,10 @@ def get_exp_name(cfg):
     exp_name += '_' + str(cfg.finetune.filter_by_recursive_mdp)
     exp_name += '_' + str(cfg.finetune.min_steps)
     exp_name += '_' + str(cfg.finetune.replan_horizon)
+    if cfg.finetune.num_steps > 0 and not cfg.finetune.relevance_by_value:
+        exp_name += '_' + "TTT_no_critic"
+    elif cfg.finetune.num_steps > 0 and cfg.finetune.relevance_by_value:
+        exp_name += '_' + "TTT"
     exp_name += '_' + datetime.now().strftime('%Y%m%d_%H%M%S')
     exp_name += f'_s{cfg.seed:03d}'
     return exp_name

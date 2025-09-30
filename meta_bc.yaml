@@ -7,7 +7,7 @@ restore_path: null
 restore_epoch: null
 
 agent:
-  agent_name: gcbc
+  agent_name: meta_gcbc
   actor_loss: bc
 
 # Hyperparameters specific to test-time fine-tuning
@@ -33,7 +33,7 @@ finetune:
   replan_horizon: 100 # or 200 (added)  K in the paper
 
 train_steps: 1000000
-log_interval: 5000
+log_interval: 100
 eval_interval: 100000 # old 100000
 save_interval: 100000
 eval_start: 000000  # Old: 800000

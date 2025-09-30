@@ -1,19 +1,27 @@
 from collections import defaultdict
 import copy
 import jax
+import jax.numpy as jnp
 from tqdm import trange
 from utils.config import FinetuneConfig
-from typing import Optional
+from typing import Optional, Tuple, Any
 import optax
 import numpy as np
 import matplotlib.pyplot as plt
 import io
 import wandb
 from PIL import Image
-from utils.datasets import GCDataset
+from utils.datasets import GCDataset, HGCDataset, Dataset
 from agents.gcagent import GCAgent
 from typing import Dict
 from dataclasses import asdict
+from concurrent.futures import ThreadPoolExecutor, as_completed, ProcessPoolExecutor
+from utils.env_utils import make_env_and_datasets
+from utils.config import GCTTTConfig
+import importlib
+import multiprocessing
+import time
+
 
 
 def supply_rng(f, rng=jax.random.PRNGKey(0)):
@@ -125,15 +133,30 @@ def copy_current_agent(agent: GCAgent, finetune_config: FinetuneConfig) -> GCAge
     if alpha_val := _cfg_get(finetune_config, "alpha", None) is not None:
         new_config["alpha"] = alpha_val
     old_train_state = copy.deepcopy(agent.network)
-    opt_state = agent.network.opt_state
+    opt_state = copy.deepcopy(agent.network.opt_state)
     finetune_tx = optax.adam(learning_rate=_cfg_get(finetune_config, "lr"))
 
-    agent = agent.replace(
+    copy_agent = agent.replace(
         network=agent.network.replace(tx=finetune_tx, opt_state=opt_state),
         config=new_config,
     )
 
-    return agent, old_train_state, old_config
+    return copy_agent, agent, old_config
+
+
+def clone_agent(agent):
+    # Deep, side-effect-free clone
+    state = flax.serialization.to_state_dict(agent)
+    return flax.serialization.from_state_dict(agent, state)
+
+
+def snapshot_agent(agent):
+    # Keep only the serialized snapshot; cheaper to store/restore
+    return flax.serialization.to_state_dict(agent)
+
+def restore_agent_from_snapshot(agent, snapshot):
+    return flax.serialization.from_state_dict(agent, snapshot)
+
 
 
 def make_current_config(finetune_config: FinetuneConfig) -> FinetuneConfig:
@@ -141,7 +164,7 @@ def make_current_config(finetune_config: FinetuneConfig) -> FinetuneConfig:
     if hasattr(finetune_config, "unfreeze"):
         current_finetune_config = finetune_config.unfreeze()
     else:
-        current_finetune_config = dict(finetune_config)
+        current_finetune_config = copy.deepcopy(finetune_config)
 
     cube_env = current_finetune_config.get("cube_env", False)
     if cube_env:  # A way to detect CubeEnv, or use env.spec.id
@@ -167,18 +190,16 @@ def actor_step(
     actor_fn,
     observation,
     env,
-    config: Dict,
+    config: GCTTTConfig,
     goal,
-    eval_gaussian=None,
-    eval_temperature: float = 0.0,
 ):
     action = actor_fn(
-        observations=observation, goals=goal, temperature=eval_temperature
+        observations=observation, goals=goal, temperature=config.eval_temperature
     )
     action = np.array(action)
-    if not config.get("discrete"):
-        if eval_gaussian is not None:
-            action = np.random.normal(action, eval_gaussian)
+    if not config.agent.get("discrete"):
+        if config.eval_gaussian is not None:
+            action = np.random.normal(action, config.eval_gaussian)
         action = np.clip(action, -1, 1)
 
     next_observation, reward, terminated, truncated, info = env.step(action)
@@ -189,11 +210,8 @@ def gc_ttt_critic(
     train_dataset: GCDataset,
     agent: GCAgent,
     env,
-    config: Dict,
-    finetune_config: FinetuneConfig,
+    config: GCTTTConfig,
     goal,
-    eval_gaussian=None,
-    eval_temperature: float = 0.0,
 ):
 
     done = False
@@ -392,32 +410,34 @@ def gc_ttt_critic_free(
     agent: GCAgent,
     env,
     observation,
-    config: Dict,
-    finetune_config: FinetuneConfig,
+    config: GCTTTConfig,
     goal,
     goal_frame,
     should_render: bool,
-    video_frame_skip,
-    eval_gaussian=None,
-    eval_temperature: float = 0.0,
+    _filter
 ):
     # GC-TTT without critic
     traj = defaultdict(list)
     finetune_stats = defaultdict(list)
     info = None
 
+    finetune_config = config.finetune
+
     if _cfg_get(finetune_config, "num_steps", 0):
 
         current_finetune_config = make_current_config(finetune_config)
 
+        #t0 = time.time()
         # Prepare _filter function critic free
-        _filter, max_len = train_dataset.prepare_active_sample(
-            agent, observation, goal, current_finetune_config, exp_name=exp_name
-        )
+        #_filter, max_len = train_dataset.prepare_active_sample(
+        #    agent, observation, goal, current_finetune_config
+        #)
+        #print("time for preparing samples", time.time() - t0)
         # Skip fine-tuning if the filter would select nothing
         num_steps = (
             int(_cfg_get(finetune_config, "num_steps", 0)) if _filter.sum() else 0
         )
+        t_finetune_start = time.time()
         for _ in range(num_steps):
             # Sample a batch from the dataset using the filter.
             # The batch will contain only the samples that match the filter.
@@ -432,6 +452,7 @@ def gc_ttt_critic_free(
             # Update the agent with the sampled batch.
             agent, info = agent.update(batch, finetuning=True)
             add_to(finetune_stats, flatten(info))
+        print("time for finetunin num_steps", time.time() - t_finetune_start)
 
     # Plotting values and actions after fine-tuning
     if not _cfg_get(finetune_config, "visual_env", False):
@@ -448,14 +469,15 @@ def gc_ttt_critic_free(
     done = False
     step = 0
     render = []
+    rollout_start_time = time.time()
     while not done:
         next_observation, action, reward, terminated, truncated, info = actor_step(
-            actor_fn, observation, env, config, goal, eval_gaussian, eval_temperature
+            actor_fn, observation, env, config, goal
         )
         step += 1
         done = terminated or truncated or step >= 3000
 
-        if should_render and (step % video_frame_skip == 0 or done):
+        if should_render and (step % config.video_frame_skip == 0 or done):
             frame = env.render().copy()
             if goal_frame is not None:
                 render.append(np.concatenate([goal_frame, frame], axis=0))
@@ -472,6 +494,8 @@ def gc_ttt_critic_free(
         )
         add_to(traj, transition)
         observation = next_observation
+    rollout_end_time = time.time()
+    print(f"Rollout took {rollout_end_time - rollout_start_time:.4f} seconds")
 
     return traj, info, finetune_stats, render
 
@@ -479,16 +503,9 @@ def gc_ttt_critic_free(
 def evaluate(
     agent: GCAgent,
     env,
-    task_id=None,
-    config=None,
-    finetune_config: Optional[FinetuneConfig] = None,
-    num_eval_episodes: int = 50,
-    num_video_episodes: int = 0,
-    train_dataset=None,
-    video_frame_skip: int = 3,
-    eval_temperature: float = 0.0,
-    eval_gaussian=None,
-    exp_name=None,
+    config: GCTTTConfig,
+    task_id: int,
+    train_dataset: GCDataset,
 ):
     """Evaluate the agent in the environment.
 
@@ -508,14 +525,42 @@ def evaluate(
         A tuple containing the statistics, trajectories, and rendered videos.
     """
 
+    agent_snapshot = snapshot_agent(agent)
+
     trajs = []
     stats = defaultdict(list)
 
     renders = []
-    for i in trange(num_eval_episodes + num_video_episodes):
+
+
+    items = []
+    for i in trange(config.eval_episodes + config.video_episodes):
+        should_render = i >= config.eval_episodes
+
+        observation, info = env.reset(
+            options=dict(task_id=task_id, render_goal=should_render)
+        )
+        goal = info.get("goal")
+
+        items.append((observation, goal))
+
+    num_workers = 5  # tune (2–4 is usually safe)
+    print("Creating filters for datasets...")
+    filter_start_time = time.time()
+    with ThreadPoolExecutor(max_workers=num_workers) as ex:
+        results = list(ex.map(lambda args: train_dataset.prepare_active_sample(agent, args[0], args[1], config.finetune, log_filter=False), items))
+    filter_end_time = time.time()
+    print(f"Creating filters for datasets took {filter_end_time - filter_start_time:.4f} seconds")
+
+    print(results)
+
+
+    for i in trange(config.eval_episodes + config.video_episodes):
+
+        agent_ft = clone_agent(agent)             # working copy for finetuning
 
         # Render only video episodes
-        should_render = i >= num_eval_episodes
+        should_render = i >= config.eval_episodes
 
         observation, info = env.reset(
             options=dict(task_id=task_id, render_goal=should_render)
@@ -528,56 +573,53 @@ def evaluate(
         # Simple script to plot critic and policy output in a 2D environment
         # We sample a batch from the training dataset, then calculate both values and actions on sampled batch
         # Plotting values and actions before fine-tuning
-        visual_env = _cfg_get(finetune_config, "visual_env", False)
+        visual_env = _cfg_get(config.finetune, "visual_env", False)
         if not visual_env:
             # TODO: restore?
             # make_plots(train_dataset, agent, goal, "pre", _cfg_get(finetune_config, "saw", False))
             pass
 
-        recursive_mdp = _cfg_get(finetune_config, "filter_by_recursive_mdp", False)
+        recursive_mdp = _cfg_get(config.finetune, "filter_by_recursive_mdp", False)
 
         if recursive_mdp:
             # Default GC-TTT (with critic)
             # - recursive_mdp = True
             gc_ttt_critic(
                 train_dataset,
-                agent,
+                agent_ft,
                 env,
                 config,
-                finetune_config,
                 goal,
-                eval_gaussian,
-                eval_temperature,
             )
         else:
-            agent, old_train_state, old_config = copy_current_agent(agent, finetune_config)
             traj, info, finetune_stats, render = gc_ttt_critic_free(
                 train_dataset,
-                agent,
+                agent_ft,
                 env,
                 observation,
                 config,
-                finetune_config,
                 goal,
                 goal_frame,
                 should_render,
-                video_frame_skip,
-                eval_gaussian,
-                eval_temperature,
+                _filter=results[i][0]
             )
 
-            if i < num_eval_episodes:
+            if i < config.eval_episodes:
+                print(info)
                 add_to(stats, flatten(info))
                 trajs.append(traj)
             else:
                 renders.append(np.array(render))
 
-        # Reset agent parameters and state after each episode
-        agent = agent.replace(network=old_train_state, config=old_config)
+        # Reset agent state after each episode
+        agent = restore_agent_from_snapshot(agent, agent_snapshot)
 
     stats.update({"finetune/" + k: v for k, v in finetune_stats.items()})
-    # print('stats', stats)
+
+    # Aggregate statistics over eval_episodes
     for k, v in stats.items():
         stats[k] = np.mean(v)
+
+    print(f"Stats: {stats}")
 
     return stats, trajs, renders

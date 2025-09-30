@@ -2,21 +2,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, TypedDict
 
 import yaml
 
 
-@dataclass
-class AgentConfig:
-    """Configuration for the agent selection.
+class AgentConfig(TypedDict, total=False):
+    """Dictionary-style configuration for agent selection with flexible keys.
 
-    Attributes:
-        agent_name: Identifier of the agent to run (e.g., 'gciql', 'gcbc').
+    Known keys are documented here; additional keys may be added at runtime.
     """
-
-    agent_name: str = "gciql"
-    actor_loss: str = "bc"
+    agent_name: str  # e.g., 'gciql', 'gcbc'
+    actor_loss: str  # e.g., 'bc', 'ddpgbc'
 
 
 @dataclass
@@ -95,7 +92,7 @@ class GCTTTConfig:
     restore_path: Optional[str] = None
     restore_epoch: Optional[int] = None
 
-    agent: AgentConfig = field(default_factory=AgentConfig)
+    agent: Dict[str, Any] = field(default_factory=lambda: {"agent_name": "gciql", "actor_loss": "bc"})
     finetune: FinetuneConfig = field(default_factory=FinetuneConfig)
 
     train_steps: int = 1_000_000
@@ -122,7 +119,7 @@ class GCTTTConfig:
             working_dir=str(data.get("working_dir", cls.working_dir)),
             restore_path=data.get("restore_path", None),
             restore_epoch=data.get("restore_epoch", None),
-            agent=AgentConfig(**data.get("agent", {})),
+            agent=data.get("agent", {"agent_name": "gciql", "actor_loss": "bc"}),
             finetune=FinetuneConfig(**data.get("finetune", {})),
             train_steps=int(data.get("train_steps", cls.train_steps)),
             log_interval=int(data.get("log_interval", cls.log_interval)),

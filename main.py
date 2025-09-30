@@ -25,36 +25,55 @@ from utils.config import GCTTTConfig, load_config
 import matplotlib.pyplot as plt
 import io
 from PIL import Image
+import importlib
+
 
 
 def main(cfg: GCTTTConfig):
 
-    # Load agent defaults
-    import importlib
-
-    cfg_dict = asdict(cfg)
-    agent_cfg = importlib.import_module(f"agents.{cfg.agent.agent_name}").get_config()
+    agent_cfg = importlib.import_module(f"agents.{cfg.agent['agent_name']}").get_config()
     for k, v in agent_cfg.items():
-        if k not in cfg_dict["agent"]:
-            cfg_dict["agent"][k] = v
+        if k not in cfg.agent:
+            cfg.agent[k] = v
 
     # Set up logger.
     # split env_name by '-'
-    env_name_split = cfg.env_name.split("-")
-    # set wandb_env_name as the first part and second part of env_name_split
-    wandb_env_name = env_name_split[0] + "-" + env_name_split[2]
     exp_name = get_exp_name(cfg)
+    # Build a serializable config for logging only
+    wandb_config = {
+        "run_group": cfg.run_group,
+        "seed": cfg.seed,
+        "env_name": cfg.env_name,
+        "data_ratio": cfg.data_ratio,
+        "working_dir": cfg.working_dir,
+        "restore_path": cfg.restore_path,
+        "restore_epoch": cfg.restore_epoch,
+        "agent": cfg.agent,
+        "finetune": asdict(cfg.finetune),
+        "train_steps": cfg.train_steps,
+        "log_interval": cfg.log_interval,
+        "eval_interval": cfg.eval_interval,
+        "save_interval": cfg.save_interval,
+        "eval_start": cfg.eval_start,
+        "eval_tasks": cfg.eval_tasks,
+        "eval_episodes": cfg.eval_episodes,
+        "eval_temperature": cfg.eval_temperature,
+        "eval_gaussian": cfg.eval_gaussian,
+        "video_episodes": cfg.video_episodes,
+        "video_frame_skip": cfg.video_frame_skip,
+        "eval_on_cpu": cfg.eval_on_cpu,
+    }
     setup_wandb(
-        project="TTT_AllFinalRuns", group=cfg.run_group, name=exp_name, config=cfg_dict
+        project="TTT_AllFinalRuns", group=cfg.run_group, name=exp_name, config=wandb_config
     )
 
     # Save current expanded config in the experiment dir
     os.makedirs(cfg.working_dir, exist_ok=True)
     with open(os.path.join(cfg.working_dir, "config.yaml"), "w") as f:
-        yaml.dump(cfg_dict, f)
+        yaml.dump(wandb_config, f)
 
     # Set up environment and dataset.
-    config_agent = cfg_dict["agent"]
+    config_agent = cfg.agent
     env, train_dataset, val_dataset = make_env_and_datasets(
         cfg.env_name, cfg.data_ratio, frame_stack=config_agent["frame_stack"]
     )
@@ -97,14 +116,13 @@ def main(cfg: GCTTTConfig):
     eval_logger = CsvLogger(os.path.join(cfg.working_dir, "eval.csv"))
     first_time = time.time()
     last_time = time.time()
+
     for i in tqdm.tqdm(
         range(1, cfg.train_steps + 1), smoothing=0.1, dynamic_ncols=True
     ):
         # Update agent. TODO: determine batch shape
         batch = train_dataset.sample(config_agent["batch_size"])
-        agent, update_info = agent.update(
-            batch
-        )  # I assume training logic is in the agent
+        agent, update_info = agent.update(batch)
         # TODO: check update_info structure
 
         # Log metrics.
@@ -147,21 +165,18 @@ def main(cfg: GCTTTConfig):
             )
             for task_id in tqdm.trange(1, num_tasks + 1):
                 task_name = task_infos[task_id - 1]["task_name"]
+
                 # Test-time fine-tuning happens in here
+                eval_start_time = time.time()
                 eval_info, trajs, cur_renders = evaluate(
                     agent=eval_agent,
                     env=env,
                     task_id=task_id,
-                    config=config_agent,
-                    finetune_config=cfg.finetune,
-                    num_eval_episodes=cfg.eval_episodes,
-                    num_video_episodes=cfg.video_episodes,
+                    config=cfg,
                     train_dataset=train_dataset,
-                    video_frame_skip=cfg.video_frame_skip,
-                    eval_temperature=cfg.eval_temperature,
-                    eval_gaussian=cfg.eval_gaussian,
-                    exp_name=exp_name,
                 )
+                eval_duration = time.time() - eval_start_time
+                print(f"Evaluation for task {task_id} took {eval_duration:.2f} seconds")
 
                 # Simple script to plot rollouts, assuming that the first 2 dimensions
                 # of the data represent XY CoM coordinates.

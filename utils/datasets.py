@@ -265,7 +265,7 @@ def filter_from_state_goal(dataset, obs, goal, quantile, slack, sim_threshold, f
     filtered_eps = (start_matches.sum(-1) * goal_matches.sum(-1)) > 0
     if filtered_eps.sum():
         # NOTE: complexity of extracting these trajectories
-        # Count num of steps -> 
+        # Count num of steps ->
         # Here, we are trying to select the best subtrajectory in each matching trajectory
         goal_matches_id = np.arange(ep_len).reshape(1, -1) * goal_matches
         goal_matches_id = np.where(goal_matches_id == 0, ep_len, goal_matches_id)
@@ -621,9 +621,16 @@ class GCDataset:
 
             try:
                 buf = io.BytesIO()
-                plt.scatter(_obs[:5000, 0], _obs[:5000, 1])
-                plt.scatter(filtered_pbs[:, 0], filtered_pbs[:, 1], alpha=0.5)
-                #plt.savefig(f'Zfilter_{exp_name}.png')
+                plt.scatter(_obs[:5000, 0], _obs[:5000, 1], label='All observations')
+
+                # Only plot filtered points if there are any
+                if len(filtered_pbs) > 0:
+                    plt.scatter(filtered_pbs[:, 0], filtered_pbs[:, 1], alpha=0.5, label='Filtered observations')
+                else:
+                    print("Warning: No observations passed the filter")
+
+                plt.legend()
+                plt.title(f'Filter visualization (filtered: {len(filtered_pbs)}/{len(_obs)})')
                 plt.savefig(buf, format='png')
                 plt.close()
                 buf.seek(0)

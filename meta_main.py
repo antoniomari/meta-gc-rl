@@ -3,12 +3,16 @@ import yaml
 import os
 import random
 import time
+import psutil
+import gc
 from collections import defaultdict
 
 os.environ["XLA_FLAGS"] = "--xla_gpu_deterministic_ops=true --xla_gpu_autotune_level=0"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # 0=all, 1=INFO off, 2=WARNING off, 3=ERROR only
 os.environ["TF_DETERMINISTIC_OPS"] = "1"
 os.environ["TF_CUDNN_DETERMINISTIC"] = "1"
 
+import gymnasium as gym
 import wandb
 import jax
 from dataclasses import asdict
@@ -22,58 +26,98 @@ from utils.evaluation import evaluate, _cfg_get
 from utils.flax_utils import restore_agent, save_agent
 from utils.log_utils import CsvLogger, get_exp_name, get_wandb_video, setup_wandb
 from utils.config import GCTTTConfig, load_config
-from agents.gcagent import GCAgent
+from agents.gcagent import GCAgent, MetaGCAgent
 import matplotlib.pyplot as plt
 import io
 from PIL import Image
 import importlib
 
 
+
+# META Learning methods to run: standard maml, FOMAML, Reptile
 def fetch_goal_conditioned_batch(agent: GCAgent, train_dataset: GCDataset, start_state, goal, finetune_config, test_batch_size: int):
+
+    print(f"Start state: {start_state}")
+    print(f"Goal: {goal}")
 
     # Prepare _filter function critic free
     _filter, max_len = train_dataset.prepare_active_sample(
         agent, start_state, goal, finetune_config
     )
 
+    # If _filter is all zeros, return empty batches
+    if (np.asarray(_filter) == 0).all():
+        print("Warning: _filter is all zeros, returning empty batches.")
+        train_batch = {}
+        test_batch = {}
+        return train_batch, test_batch
+
+    total_batch_size = _cfg_get(finetune_config, "batch_size") + test_batch_size
     batch = train_dataset.active_sample(
-        _cfg_get(finetune_config, "batch_size") + test_batch_size,
+        total_batch_size,
         _filter,
         goal,
         _cfg_get(finetune_config, "ratio"),
         _cfg_get(finetune_config, "fix_actor_goal"),
         finetune_kwargs=finetune_config,
     )
+    # Split batch into train_batch and test_batch
+    train_batch = {k: v[:_cfg_get(finetune_config, "batch_size")] for k, v in batch.items()}
+    test_batch = {k: v[_cfg_get(finetune_config, "batch_size"):] for k, v in batch.items()}
 
     return train_batch, test_batch
 
 
 def main(cfg: GCTTTConfig):
 
-    # Load agent defaults
-    cfg_dict = asdict(cfg)
-    agent_cfg = importlib.import_module(f"agents.{cfg.agent.agent_name}").get_config()
+    if cfg.agent['agent_name'].startswith("meta_"):
+        agent_file_name = cfg.agent['agent_name'][len("meta_"):]
+    else:
+        agent_file_name = cfg.agent['agent_name']
+    agent_cfg = importlib.import_module(f"agents.{agent_file_name}").get_config()
     for k, v in agent_cfg.items():
-        if k not in cfg_dict["agent"]:
-            cfg_dict["agent"][k] = v
+        if k not in cfg.agent:
+            cfg.agent[k] = v
 
     # Set up logger.
     # split env_name by '-'
-    env_name_split = cfg.env_name.split("-")
-    # set wandb_env_name as the first part and second part of env_name_split
-    wandb_env_name = env_name_split[0] + "-" + env_name_split[2]
     exp_name = get_exp_name(cfg)
+    # Build a serializable config for logging only
+    wandb_config = {
+        "run_group": cfg.run_group,
+        "seed": cfg.seed,
+        "env_name": cfg.env_name,
+        "data_ratio": cfg.data_ratio,
+        "working_dir": cfg.working_dir,
+        "restore_path": cfg.restore_path,
+        "restore_epoch": cfg.restore_epoch,
+        "agent": cfg.agent,
+        "finetune": asdict(cfg.finetune),
+        "train_steps": cfg.train_steps,
+        "log_interval": cfg.log_interval,
+        "eval_interval": cfg.eval_interval,
+        "save_interval": cfg.save_interval,
+        "eval_start": cfg.eval_start,
+        "eval_tasks": cfg.eval_tasks,
+        "eval_episodes": cfg.eval_episodes,
+        "eval_temperature": cfg.eval_temperature,
+        "eval_gaussian": cfg.eval_gaussian,
+        "video_episodes": cfg.video_episodes,
+        "video_frame_skip": cfg.video_frame_skip,
+        "eval_on_cpu": cfg.eval_on_cpu,
+    }
     setup_wandb(
-        project="TTT_AllFinalRuns", group=cfg.run_group, name=exp_name, config=cfg_dict
+        project="TTT_AllFinalRuns", group=cfg.run_group, name=exp_name, config=wandb_config
     )
 
     # Save current expanded config in the experiment dir
     os.makedirs(cfg.working_dir, exist_ok=True)
     with open(os.path.join(cfg.working_dir, "config.yaml"), "w") as f:
-        yaml.dump(cfg_dict, f)
+        yaml.dump(wandb_config, f)
 
     # Set up environment and dataset.
-    config_agent = cfg_dict["agent"]
+    config_agent = cfg.agent
+    env: gym.Env
     env, train_dataset, val_dataset = make_env_and_datasets(
         cfg.env_name, cfg.data_ratio, frame_stack=config_agent["frame_stack"]
     )
@@ -84,9 +128,9 @@ def main(cfg: GCTTTConfig):
         "GCDataset": GCDataset,
         "HGCDataset": HGCDataset,
     }[config_agent["dataset_class"]]
-    train_dataset: GCDataset | HGCDataset = dataset_class(Dataset.create(**train_dataset), config_agent)
+    train_dataset = dataset_class(Dataset.create(**train_dataset), config_agent)
     if val_dataset is not None:
-        val_dataset: GCDataset | HGCDataset = dataset_class(Dataset.create(**val_dataset), config_agent)
+        val_dataset = dataset_class(Dataset.create(**val_dataset), config_agent)
 
     # Initialize agent.
     random.seed(cfg.seed)
@@ -100,7 +144,7 @@ def main(cfg: GCTTTConfig):
         )
 
     agent_class = agents[config_agent["agent_name"]]
-    agent: GCAgent = agent_class.create(
+    agent: MetaGCAgent = agent_class.create(
         cfg.seed,
         example_batch["observations"],
         example_batch["actions"],
@@ -120,40 +164,103 @@ def main(cfg: GCTTTConfig):
     # add warmup
     # GC-BC antmaze (0 meta learning step) no TTT
     # Without TTT we can inspect "how much" params are updated l2-distance param space, l2-distance output space,
+    # TTT-with-critic: precomputation to be updated periodically
     #
+
+    META_LEARNING_START_STEP = 99_000
+
+    def get_memory_usage():
+        """Get current memory usage in MB."""
+        process = psutil.Process(os.getpid())
+        return process.memory_info().rss / 1024 / 1024
+
     for i in tqdm.tqdm(
         range(1, cfg.train_steps + 1), smoothing=0.1, dynamic_ncols=True
     ):
-        # 1. Sample task
-        # TODO: define how to sample goal and starting state
-        NUM_TASKS_TO_SAMPLE = 1
 
-        updated_agents = []
-        for j in range(NUM_TASKS_TO_SAMPLE):
+        if i < META_LEARNING_START_STEP:
+            batch = train_dataset.sample(config_agent["batch_size"])
+            agent, update_info = agent.update(batch)
+        else:
+            # 1. Sample task
+            # TODO: define how to sample goal and starting state
+            NUM_TASKS_TO_SAMPLE = 1
 
-            # 1. Sample (s0, g)
-            start_state, goal = ...
-            # idea: sample one from dataset, then sample one
-            # Proper: sample uniform
-            # Optimal: evaluation task
-            # Start from decisions most likely to work
+            task_batches = 0
+            while task_batches < NUM_TASKS_TO_SAMPLE:
 
-            # 2. Select data relevant to the initial state
-            train_batch, test_batch = fetch_goal_conditioned_batch(agent, train_dataset, start_state, goal, finetune_config)
+                # 1. Sample (s0, g)
+                task_id = np.random.randint(1, 6)
+                print(f"Selected task {task_id}")
 
-            # Copy agent
-            updated_agent, update_info = agent.update(
-                train_batch
-            )  # I assume training logic is in the agent
-            updated_agents.append(updated_agent)
+                # Monitor memory before environment reset
+                memory_before_reset = get_memory_usage()
+                observation, info = env.reset(
+                    options=dict(task_id=task_id, render_goal=False)
+                )
+                memory_after_reset = get_memory_usage()
+                print(f"[Memory] Before reset: {memory_before_reset:.2f} MB, After reset: {memory_after_reset:.2f} MB")
 
-            # Compute grad of test loss wrt original weight
-            compute_loss(test_batch, updated_agent, wrt=agent)
+                start_state, goal = observation, info.get("goal")
 
-        # Backpropagate loss
-        accumulate_gradients
-        backward_gradients
-        optimizer.optimize(agent)
+                # idea: sample one from dataset, then sample one
+                # Proper: sample uniform
+                # Optimal: evaluation task
+                # Start from decisions most likely to work
+
+                # 2. Select data relevant to the initial state
+                t_fetch_start = time.time()
+                memory_before_fetch = get_memory_usage()
+                result = fetch_goal_conditioned_batch(
+                    agent, train_dataset, start_state, goal, cfg.finetune,
+                    test_batch_size=cfg.finetune.batch_size
+                )
+                memory_after_fetch = get_memory_usage()
+                t_fetch_end = time.time()
+                fetch_time = t_fetch_end - t_fetch_start
+                print(f"[Timer] Batch fetching took {fetch_time:.4f} seconds.")
+                print(f"[Memory] Before fetch: {memory_before_fetch:.2f} MB, After fetch: {memory_after_fetch:.2f} MB (+{memory_after_fetch - memory_before_fetch:.2f} MB)")
+
+                # Clear dataset cache periodically to prevent memory growth
+                if i % 50 == 0:  # Every 50 iterations
+                    if hasattr(train_dataset, 'clear_cache'):
+                        train_dataset.clear_cache()
+                        print("[Memory] Cleared dataset cache")
+
+                if not result or any(len(v) == 0 for v in result):
+                    print("[SKIP] Skipping batch for task", task_id, "- resampling task")
+                    continue
+
+                train_batch, test_batch = result
+
+                t_inner_start = time.time()
+                memory_before_inner = get_memory_usage()
+                agent, update_info = agent.meta_inner_update(train_batch, test_batch, is_fomaml=True)
+                memory_after_inner = get_memory_usage()
+                t_inner_end = time.time()
+                inner_update_time = t_inner_end - t_inner_start
+                print(f"[Timer] Inner update took {inner_update_time:.4f} seconds.")
+                print(f"[Memory] Before inner: {memory_before_inner:.2f} MB, After inner: {memory_after_inner:.2f} MB (+{memory_after_inner - memory_before_inner:.2f} MB)")
+
+                task_batches += 1
+
+            # Perform meta update
+            t_meta_start = time.time()
+            memory_before_meta = get_memory_usage()
+            agent = agent.meta_update(use_model_merging=False)
+            memory_after_meta = get_memory_usage()
+            t_meta_end = time.time()
+            meta_update_time = t_meta_end - t_meta_start
+            print(f"[Timer] Meta update took {meta_update_time:.4f} seconds.")
+            print(f"[Memory] Before meta: {memory_before_meta:.2f} MB, After meta: {memory_after_meta:.2f} MB (+{memory_after_meta - memory_before_meta:.2f} MB)\n")
+
+            # Clear JAX caches periodically to prevent memory growth
+            if i % 100 == 0:  # Every 100 iterations
+                jax.clear_caches()
+                gc.collect()
+                memory_mb = get_memory_usage()
+                print(f"[Memory] Cleared JAX caches. Current memory: {memory_mb:.2f} MB")
+
 
         # Log metrics.
         if i % cfg.log_interval == 0:
@@ -196,20 +303,17 @@ def main(cfg: GCTTTConfig):
             for task_id in tqdm.trange(1, num_tasks + 1):
                 task_name = task_infos[task_id - 1]["task_name"]
                 # Test-time fine-tuning happens in here
+                # Test-time fine-tuning happens in here
+                eval_start_time = time.time()
                 eval_info, trajs, cur_renders = evaluate(
                     agent=eval_agent,
                     env=env,
                     task_id=task_id,
-                    config=config_agent,
-                    finetune_config=cfg.finetune,
-                    num_eval_episodes=cfg.eval_episodes,
-                    num_video_episodes=cfg.video_episodes,
+                    config=cfg,
                     train_dataset=train_dataset,
-                    video_frame_skip=cfg.video_frame_skip,
-                    eval_temperature=cfg.eval_temperature,
-                    eval_gaussian=cfg.eval_gaussian,
-                    exp_name=exp_name,
                 )
+                eval_duration = time.time() - eval_start_time
+                print(f"Evaluation for task {task_id} took {eval_duration:.2f} seconds")
 
                 # Simple script to plot rollouts, assuming that the first 2 dimensions
                 # of the data represent XY CoM coordinates.
@@ -295,6 +399,11 @@ def main(cfg: GCTTTConfig):
                 eval_logger.log(eval_metrics, step=i)
             except Exception as e:
                 print(f"Error logging to eval_logger: {e}")
+
+            # Clear memory after evaluation
+            gc.collect()
+            jax.clear_caches()
+            print("[Memory] Cleared memory after evaluation")
 
             time.sleep(10)  # Sleep for a minute to avoid too many logs in a short time.
 

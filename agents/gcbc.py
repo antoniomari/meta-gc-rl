@@ -6,9 +6,11 @@ import jax.numpy as jnp
 import ml_collections
 import optax
 from utils.encoders import GCEncoder, encoder_modules
-from utils.flax_utils import ModuleDict, TrainState, nonpytree_field
+from utils.flax_utils import ModuleDict, TrainState, MetaTrainState, nonpytree_field
 from utils.networks import GCActor, GCDiscreteActor
-from agents.gcagent import GCAgent
+from agents.gcagent import GCAgent, MetaGCAgent
+from typing import cast
+
 
 
 class GCBCAgent(GCAgent):
@@ -59,8 +61,10 @@ class GCBCAgent(GCAgent):
         return loss, info
 
     @jax.jit
-    def update(self, batch):
+    def update(self, batch, finetuning: bool = False):
         """Update the agent and return a new agent with information dictionary."""
+        # NOTE: Finetuning argument is unused, kept for interface unification
+
         new_rng, rng = jax.random.split(self.rng) # rng used now, new_rng for next step
 
         def loss_fn(grad_params):
@@ -148,6 +152,131 @@ class GCBCAgent(GCAgent):
         network = TrainState.create(network_def, network_params, tx=network_tx)
 
         return cls(rng, network=network, config=flax.core.FrozenDict(**config))
+
+
+class MetaGCBCAgent(MetaGCAgent):
+    """Goal-conditioned behavioral cloning (GCBC) agent."""
+    # NOTE: flax.struct.PyTreeNode is turned into a frozen dataclass like Flax struct
+    # - attributes declared in the class body are instance fields
+    # - nonpytree_field() is a Flax helper marks a field as non-pytree (excluded from JAX transformations/trees)
+
+    def actor_loss(self, batch, grad_params, rng=None):
+        """Compute the BC actor loss."""
+        dist =self.meta_train_state.select('actor')(batch['observations'], batch['actor_goals'], params=grad_params)
+        log_prob = dist.log_prob(batch['actions'])
+
+        actor_loss = -log_prob.mean()
+
+        actor_info = {
+            'actor_loss': actor_loss,
+            'bc_log_prob': log_prob.mean(),
+        }
+        if not self.config['discrete']:
+            actor_info.update(
+                {
+                    # policy deterministic action vs dataset action
+                    'mse': jnp.mean((dist.mode() - batch['actions']) ** 2),
+                    # mean of distribution diagonal standard deviation
+                    'std': jnp.mean(dist.scale_diag),
+                }
+            )
+
+        return actor_loss, actor_info
+
+    @jax.jit  # mindful of arguments that must be static (e.g. shapes), recompiles if shapes change
+    def total_loss(self, batch, grad_params, rng=None):
+        """Compute the total loss."""
+        info = {}
+        rng = rng if rng is not None else self.rng
+
+        rng, actor_rng = jax.random.split(rng)
+        actor_loss, actor_info = self.actor_loss(batch, grad_params, actor_rng)
+        for k, v in actor_info.items():
+            info[f'actor/{k}'] = v
+
+        loss = actor_loss
+        return loss, info
+
+    @jax.jit
+    def update(self, batch, finetuning: bool = False):
+        """Update the agent and return a new agent with information dictionary."""
+        # NOTE: Finetuning argument is unused, kept for interface unification
+
+        new_rng, rng = jax.random.split(self.rng) # rng used now, new_rng for next step
+
+        def loss_fn(grad_params):
+            return self.total_loss(batch, grad_params, rng=rng)
+
+        new_meta_train_state, info = self.meta_train_state.apply_loss_fn(loss_fn=loss_fn)
+
+        # Return a new immutable agent with updated network and PRNG + metrics
+        return self.replace(meta_train_state=new_meta_train_state, rng=new_rng), info
+
+
+
+    @classmethod
+    def create(
+        cls,
+        seed,
+        ex_observations,
+        ex_actions,
+        config,
+    ):
+        """Create a new agent.
+
+        Args:
+            seed: Random seed.
+            ex_observations: Example batch of observations.
+            ex_actions: Example batch of actions. In discrete-action MDPs, this should contain the maximum action value.
+            config: Configuration dictionary.
+        """
+        rng = jax.random.PRNGKey(seed)
+        # jax random splits keys deterministically, to have multiple reproducible random streams
+        rng, init_rng = jax.random.split(rng, 2)
+
+        ex_goals = ex_observations
+        if config['discrete']:
+            action_dim = ex_actions.max() + 1
+        else:
+            action_dim = ex_actions.shape[-1]
+
+        # Define encoder.
+        encoders = dict()
+        if config['encoder'] is not None:
+            encoder_module = encoder_modules[config['encoder']]
+            encoders['actor'] = GCEncoder(concat_encoder=encoder_module())
+
+        # Define actor network.
+        if config['discrete']:
+            actor_def = GCDiscreteActor(
+                hidden_dims=config['actor_hidden_dims'],
+                action_dim=action_dim,
+                gc_encoder=encoders.get('actor'),
+            )
+        else:
+            actor_def = GCActor(
+                hidden_dims=config['actor_hidden_dims'],
+                action_dim=action_dim,
+                state_dependent_std=False,
+                const_std=config['const_std'],
+                gc_encoder=encoders.get('actor'),
+            )
+
+        network_info = dict(
+            actor=(actor_def, (ex_observations, ex_goals)),
+        )
+        networks = {k: v[0] for k, v in network_info.items()}
+        network_args = {k: v[1] for k, v in network_info.items()}
+
+        network_def = ModuleDict(networks)
+        network_tx = optax.adam(learning_rate=config['lr'])
+        # init + dummy forward pass, returns PyTree?
+        network_params = network_def.init(init_rng, **network_args)['params']
+        # wrapper -> tracks params and optimizer state, to pass to update steps
+        meta_train_state = MetaTrainState.create(network_def, network_params, tx=network_tx)
+
+        return cls(rng, meta_train_state=meta_train_state, config=flax.core.FrozenDict(**config))
+
 
 
 def get_config():
