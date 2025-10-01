@@ -1,26 +1,23 @@
 from collections import defaultdict
 import copy
 import jax
-import jax.numpy as jnp
 from tqdm import trange
 import flax
 from utils.config import FinetuneConfig
-from typing import Optional, Tuple, Any
+from typing import Optional, Any
 import optax
 import numpy as np
 import matplotlib.pyplot as plt
 import io
 import wandb
 from PIL import Image
-from utils.datasets import GCDataset, HGCDataset, Dataset
+from utils.datasets import GCDataset
 from agents.gcagent import GCAgent
 from typing import Dict
 from dataclasses import asdict
-from concurrent.futures import ThreadPoolExecutor, as_completed, ProcessPoolExecutor
-from utils.env_utils import make_env_and_datasets
+from concurrent.futures import ThreadPoolExecutor
 from utils.config import GCTTTConfig
-import importlib
-import multiprocessing
+import gymnasium as gym
 import time
 
 

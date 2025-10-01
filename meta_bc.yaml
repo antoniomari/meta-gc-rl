@@ -9,6 +9,7 @@ restore_epoch: null
 agent:
   agent_name: meta_gcbc
   actor_loss: bc
+  meta_batch_size: 32
 
 # Hyperparameters specific to test-time fine-tuning
 finetune:

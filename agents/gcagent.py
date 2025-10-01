@@ -56,14 +56,12 @@ class MetaGCAgent(flax.struct.PyTreeNode):
         # Return a new immutable agent with updated network and PRNG + metrics
         return self.replace(meta_train_state=new_meta_train_state, rng=new_rng), info
 
-    @functools.partial(jax.jit, static_argnames=("is_fomaml", "i"))
     def meta_inner_update(
         self,
-        train_batch: dict,
         i: int,
+        train_batch: dict,
         test_batch: Optional[dict] = None,
         is_fomaml: bool = False,
-
     ) -> tuple["MetaGCAgent", dict]:
         """
         Perform an inner-loop meta-update for a single task.
@@ -84,7 +82,7 @@ class MetaGCAgent(flax.struct.PyTreeNode):
         new_meta_train_state = self.meta_train_state.add_task_adaptation_result(updated_params, test_grads, i)
         return self.replace(meta_train_state=new_meta_train_state), info
 
-
+    @functools.partial(jax.jit, static_argnames=("is_fomaml"))
     def get_inner_update_result(self, train_batch, test_batch = None, is_fomaml = True):
         new_rng, step_rng = jax.random.split(self.rng)
 

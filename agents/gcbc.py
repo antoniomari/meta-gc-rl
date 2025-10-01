@@ -280,6 +280,7 @@ class MetaGCBCAgent(MetaGCAgent):
             network_params,
             inner_opt=inner_opt,
             meta_opt=meta_opt,
+            meta_batch_size=config['meta_batch_size'],
         )
 
         return cls(rng, meta_train_state=meta_train_state, config=flax.core.FrozenDict(**config))

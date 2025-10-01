@@ -364,7 +364,7 @@ def main(cfg: GCTTTConfig):
 
     # No / Full meta-learning here
     META_LEARNING_START_STEP = 0 # 99_000
-    META_BATCH_SIZE = 32   # 4  Jonas: much larges 10-100 or more?
+    META_BATCH_SIZE = config_agent["meta_batch_size"]   # Jonas: much 10-100 or more?
     # Start by cheating case with Meta-learning
     # GC-BC-TTT-No critic VS GC-BC-TTT-No critic with meta-learning in this environment
     # MAML, FOMAML, Reptile
@@ -425,7 +425,7 @@ def main(cfg: GCTTTConfig):
             for i, (train_batch, test_batch) in enumerate(task_batches):
                 is_fomaml = META_LEARNING_ALGORITHM == "fomaml"
                 agent, update_info = agent.meta_inner_update(
-                    train_batch, test_batch, is_fomaml=is_fomaml, i=i
+                    i, train_batch, test_batch, is_fomaml=is_fomaml
                 )
 
             t_inner_end = time.time()

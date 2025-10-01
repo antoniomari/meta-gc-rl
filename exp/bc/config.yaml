@@ -18,6 +18,7 @@ agent:
   frame_stack: null
   gc_negative: true
   lr: 0.0003
+  meta_batch_size: 32
   p_aug: 0.0
   value_geom_sample: false
   value_p_curgoal: 0.0
