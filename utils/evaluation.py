@@ -3,6 +3,7 @@ import copy
 import jax
 import jax.numpy as jnp
 from tqdm import trange
+import flax
 from utils.config import FinetuneConfig
 from typing import Optional, Tuple, Any
 import optax
@@ -144,22 +145,22 @@ def copy_current_agent(agent: GCAgent, finetune_config: FinetuneConfig) -> GCAge
     return copy_agent, agent, old_config
 
 
-def clone_agent(agent):
+def clone_agent(agent: GCAgent) -> GCAgent:
     # Deep, side-effect-free clone
     state = flax.serialization.to_state_dict(agent)
     return flax.serialization.from_state_dict(agent, state)
 
 
-def snapshot_agent(agent):
+def snapshot_agent(agent: GCAgent) -> Dict[str, Any]:
     # Keep only the serialized snapshot; cheaper to store/restore
     return flax.serialization.to_state_dict(agent)
 
-def restore_agent_from_snapshot(agent, snapshot):
+def restore_agent_from_snapshot(agent: GCAgent, snapshot: Dict[str, Any]) -> GCAgent:
     return flax.serialization.from_state_dict(agent, snapshot)
 
 
 
-def make_current_config(finetune_config: FinetuneConfig) -> FinetuneConfig:
+def make_current_config(finetune_config: FinetuneConfig, env: gym.Env) -> FinetuneConfig:
     # _filter is a binary mask over the entire dataset
     if hasattr(finetune_config, "unfreeze"):
         current_finetune_config = finetune_config.unfreeze()
@@ -414,7 +415,8 @@ def gc_ttt_critic_free(
     goal,
     goal_frame,
     should_render: bool,
-    _filter
+    _filter,
+    num_finetuning_steps: Optional[int] = None
 ):
     # GC-TTT without critic
     traj = defaultdict(list)
@@ -426,17 +428,11 @@ def gc_ttt_critic_free(
     if _cfg_get(finetune_config, "num_steps", 0):
 
         current_finetune_config = make_current_config(finetune_config)
+        if num_finetuning_steps is not None:
+            num_steps = int(num_finetuning_steps) if _filter.sum() else 0
+        else:
+            num_steps = int(_cfg_get(finetune_config, "num_steps", 0)) if _filter.sum() else 0
 
-        #t0 = time.time()
-        # Prepare _filter function critic free
-        #_filter, max_len = train_dataset.prepare_active_sample(
-        #    agent, observation, goal, current_finetune_config
-        #)
-        #print("time for preparing samples", time.time() - t0)
-        # Skip fine-tuning if the filter would select nothing
-        num_steps = (
-            int(_cfg_get(finetune_config, "num_steps", 0)) if _filter.sum() else 0
-        )
         t_finetune_start = time.time()
         for _ in range(num_steps):
             # Sample a batch from the dataset using the filter.
@@ -452,7 +448,7 @@ def gc_ttt_critic_free(
             # Update the agent with the sampled batch.
             agent, info = agent.update(batch, finetuning=True)
             add_to(finetune_stats, flatten(info))
-        print("time for finetunin num_steps", time.time() - t_finetune_start)
+        print(f"time for finetuning {num_steps} steps", time.time() - t_finetune_start)
 
     # Plotting values and actions after fine-tuning
     if not _cfg_get(finetune_config, "visual_env", False):
@@ -506,6 +502,7 @@ def evaluate(
     config: GCTTTConfig,
     task_id: int,
     train_dataset: GCDataset,
+    num_finetuning_steps: Optional[int] = None
 ):
     """Evaluate the agent in the environment.
 
@@ -601,7 +598,8 @@ def evaluate(
                 goal,
                 goal_frame,
                 should_render,
-                _filter=results[i][0]
+                _filter=results[i][0],
+                num_finetuning_steps=num_finetuning_steps
             )
 
             if i < config.eval_episodes:

@@ -269,11 +269,18 @@ class MetaGCBCAgent(MetaGCAgent):
         network_args = {k: v[1] for k, v in network_info.items()}
 
         network_def = ModuleDict(networks)
-        network_tx = optax.adam(learning_rate=config['lr'])
+        # Define two separate Adam optimizers: one for inner loop, one for meta-update
+        inner_opt = optax.adam(learning_rate=config['lr'])
+        meta_opt = optax.adam(learning_rate=config['lr'])
         # init + dummy forward pass, returns PyTree?
         network_params = network_def.init(init_rng, **network_args)['params']
         # wrapper -> tracks params and optimizer state, to pass to update steps
-        meta_train_state = MetaTrainState.create(network_def, network_params, tx=network_tx)
+        meta_train_state = MetaTrainState.create(
+            network_def,
+            network_params,
+            inner_opt=inner_opt,
+            meta_opt=meta_opt,
+        )
 
         return cls(rng, meta_train_state=meta_train_state, config=flax.core.FrozenDict(**config))
 

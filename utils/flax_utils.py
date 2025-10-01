@@ -2,7 +2,7 @@ import functools
 import glob
 import os
 import pickle
-from typing import Any, Dict, Mapping, Sequence
+from typing import Any, Dict, Mapping, Sequence, List
 
 import flax
 import flax.linen as nn
@@ -183,32 +183,57 @@ class MetaTrainState(flax.struct.PyTreeNode):
     1. Perform inner-loop adaptation (N steps of optimizer) for a task, producing updated parameters.
     2. Add those updated parameters to a list (one per task).
     3. Combine all updated parameters to perform a meta-update to the original parameters.
+
+    To avoid recompilation, updated_params_list and test_loss_grads are fixed-size lists (PyTrees)
+    with static shapes, initialized with dummy values. The number of tasks (meta_batch_size) is fixed.
     """
 
     step: int
     apply_fn: Any = nonpytree_field()
     model_def: Any = nonpytree_field()
     params: Any
-    tx: Any = nonpytree_field()
-    opt_state: Any
-    updated_params_list: Any  # List of parameter PyTrees
-    test_loss_grads: Any # List of gradients of test losses (only for MAML/FOMAML)
+    inner_opt: Any = nonpytree_field()
+    inner_opt_state: Any
+    meta_opt: Any = nonpytree_field()
+    meta_opt_state: Any
+    updated_params_list: Any  # PyTree: list of parameter PyTrees, fixed size [meta_batch_size]
+    test_loss_grads: Any      # PyTree: list of gradient PyTrees, fixed size [meta_batch_size]
+    meta_batch_size: int = nonpytree_field()
 
     @classmethod
-    def create(cls, model_def, params, tx=None, **kwargs):
-        if tx is not None:
-            opt_state = tx.init(params)
+    def create(cls, model_def, params, inner_opt=None, meta_opt=None, meta_batch_size=1, **kwargs):
+        """
+        meta_batch_size: number of tasks per meta-update (fixed for the lifetime of the object)
+        """
+        if inner_opt is not None:
+            inner_opt_state = inner_opt.init(params)
         else:
-            opt_state = None
+            inner_opt_state = None
+
+        if meta_opt is not None:
+            meta_opt_state = meta_opt.init(params)
+        else:
+            meta_opt_state = None
+
+        # Helper to create a list of parameter PyTrees with the same structure as params
+        def make_pytree_list(example, n):
+            return [jax.tree_util.tree_map(jnp.zeros_like, example) for _ in range(n)]
+
+        updated_params_list = make_pytree_list(params, meta_batch_size)
+        test_loss_grads = make_pytree_list(params, meta_batch_size)
+
         return cls(
             step=1,
             apply_fn=model_def.apply,
             model_def=model_def,
             params=params,
-            tx=tx,
-            opt_state=opt_state,
-            updated_params_list=[],
-            test_loss_grads=[],
+            inner_opt=inner_opt,
+            inner_opt_state=inner_opt_state,
+            meta_opt=meta_opt,
+            meta_opt_state=meta_opt_state,
+            updated_params_list=updated_params_list,
+            test_loss_grads=test_loss_grads,
+            meta_batch_size=meta_batch_size,
             **kwargs,
         )
 
@@ -219,28 +244,18 @@ class MetaTrainState(flax.struct.PyTreeNode):
         """
 
         # Compute gradients
-        # NOTE: jax.grad is a functional that represents "grad of loss (given as parameters)"
-        # so it represents the gradient function that gets evaluated @ self.params
         grads, info = jax.grad(loss_fn, has_aux=True)(self.params)
 
-        # grad_max, grad_min, grad_norm are PyTrees with the same structure as grads.
-        # Each leaf in grad_max contains the maximum value of the corresponding gradient array,
         grad_max = jax.tree_util.tree_map(jnp.max, grads)
         grad_min = jax.tree_util.tree_map(jnp.min, grads)
         grad_norm = jax.tree_util.tree_map(jnp.linalg.norm, grads)
-        # Example output structure:
-        # If grads is a dict like {'Dense_0': {'kernel': ...array..., 'bias': ...array...}, ...}
-        # then grad_max will be {'Dense_0': {'kernel': <scalar>, 'bias': <scalar>}, ...}
-        # and similarly for grad_min and grad_norm.
 
-        # Flatten all leaves so we can aggregate statistics (e.g., global max/min/norm) across the entire parameter tree.
         grad_max_flat = jnp.concatenate([jnp.reshape(x, -1) for x in jax.tree_util.tree_leaves(grad_max)], axis=0)
         grad_min_flat = jnp.concatenate([jnp.reshape(x, -1) for x in jax.tree_util.tree_leaves(grad_min)], axis=0)
         grad_norm_flat = jnp.concatenate([jnp.reshape(x, -1) for x in jax.tree_util.tree_leaves(grad_norm)], axis=0)
 
         final_grad_max = jnp.max(grad_max_flat)
         final_grad_min = jnp.min(grad_min_flat)
-        # Sum of grad across all parameters
         final_grad_norm = jnp.linalg.norm(grad_norm_flat, ord=1)
 
         info.update(
@@ -251,34 +266,23 @@ class MetaTrainState(flax.struct.PyTreeNode):
             }
         )
 
-        # self.tx is the optimizer (Adam) -> update params using grads and opt_state
-        updates, new_opt_state = self.tx.update(grads, self.opt_state, self.params)
+        # Use meta_opt for the meta-update step
+        updates, new_meta_opt_state = self.meta_opt.update(grads, self.meta_opt_state, self.params)
         new_params = optax.apply_updates(self.params, updates)
 
         return self.replace(
             step=self.step + 1,
             params=new_params,
-            opt_state=new_opt_state,
+            meta_opt_state=new_meta_opt_state,
         ), info
 
+    def add_task_adaptation_result(self, updated_params, test_loss_grads, i):
+        self.updated_params_list[i] = updated_params
+        if test_loss_grads is not None:
+            self.test_loss_grads[i] = test_loss_grads
+        return self
 
-    def inner_loop_update(self, loss_fn, num_steps=1, tx=None):
-        """
-        Perform N steps of inner-loop optimization starting from given params (or self.params).
-        Returns the updated parameters after N steps.
-        """
-        # I should use statistics of the optimizer but don't update it now
-        # opt_state = self.tx.init(self.params) # TODO: why this is not clear
-        current_params = self.params
-
-        for _ in range(num_steps):
-            # current_params = self.apply_loss_fn(loss_fn)
-            grads, info = jax.grad(loss_fn, has_aux=True)(current_params)
-            updates, opt_state = self.tx.update(grads, self.opt_state, current_params)
-            current_params = optax.apply_updates(current_params, updates)
-        return current_params, info
-
-    def add_task_adaptation(self, loss_fn, num_steps=1, test_loss_fn=None, is_fomaml=False):
+    def inner_update(self, loss_fn, num_steps=1, test_loss_fn=None, is_fomaml=False):
         """
         Perform inner-loop adaptation for a task (N steps of optimizer), then add the resulting parameters to the list.
         If test_loss_fn is provided, compute the gradient of test_loss_fn evaluated at updated_params,
@@ -286,35 +290,35 @@ class MetaTrainState(flax.struct.PyTreeNode):
         In both cases, add the test_loss_grads to self.test_loss_grads.
         Returns a new MetaTrainState with the updated lists.
         """
-        updated_params, info = self.inner_loop_update(loss_fn, num_steps=num_steps)
 
+        # 1. Peform N steps of inner-loop optimization, train the model on the train_batch
+        opt_state = self.inner_opt_state
+        params = self.params
+
+        def step_fn(carry, _):
+            params, opt_state = carry
+            grads, info = jax.grad(loss_fn, has_aux=True)(params)
+            updates, new_opt_state = self.inner_opt.update(grads, opt_state, params)
+            new_params = optax.apply_updates(params, updates)
+            return (new_params, new_opt_state), info
+
+        (updated_params, final_opt_state), info = jax.lax.scan(
+            step_fn, (params, opt_state), None, length=num_steps
+        )
+
+        # 2. Compute test gradients using updated_params
+        test_grads = None
         if test_loss_fn is not None:
             if is_fomaml:
                 # FOMAML: grad of test_loss_fn w.r.t. updated_params
-                grads, info = jax.grad(test_loss_fn, has_aux=True)(updated_params)
+                test_grads, info = jax.grad(test_loss_fn, has_aux=True)(updated_params)
             else:
                 # MAML: grad of test_loss_fn(updated_params) w.r.t. original params
                 def test_loss_on_orig_params(orig_params):
                     return test_loss_fn(updated_params)
-                grads, info = jax.grad(test_loss_on_orig_params, has_aux=True)(self.params)
+                test_grads, info = jax.grad(test_loss_on_orig_params, has_aux=True)(self.params)
 
-            # Optimized: Use jax.tree_map for efficient list operations
-            # This is more efficient than list concatenation for large lists
-            return self.replace(
-                updated_params_list=self.updated_params_list + [updated_params],
-                test_loss_grads=self.test_loss_grads + [grads]
-            ), info
-        else:
-            return self.replace(
-                updated_params_list=self.updated_params_list + [updated_params]
-            ), info
-
-    def clear_updated_params(self):
-        """
-        Clear the list of updated parameters.
-        Returns a new MetaTrainState with an empty list.
-        """
-        return self.replace(updated_params_list=[])
+        return updated_params, test_grads, info
 
     def meta_update(self, use_model_merging=False, eps=0.1, **kwargs):
         """
@@ -339,7 +343,6 @@ class MetaTrainState(flax.struct.PyTreeNode):
             return self.replace(
                 step=self.step + 1,
                 params=merged_params,
-                updated_params_list=[],
                 **kwargs,
             )
         else:
@@ -348,15 +351,14 @@ class MetaTrainState(flax.struct.PyTreeNode):
                 lambda *gs: jnp.stack(gs).mean(axis=0), *self.test_loss_grads
             )
 
-            # Standard optimizer update
-            updates, new_opt_state = self.tx.update(meta_grads, self.opt_state, self.params)
+            # Use meta_opt for the meta-update step
+            updates, new_meta_opt_state = self.meta_opt.update(meta_grads, self.meta_opt_state, self.params)
             new_params = optax.apply_updates(self.params, updates)
 
             return self.replace(
                 step=self.step + 1,
                 params=new_params,
-                opt_state=new_opt_state,
-                updated_params_list=[],
+                meta_opt_state=new_meta_opt_state,
                 **kwargs,
             )
 

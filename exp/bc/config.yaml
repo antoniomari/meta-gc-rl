@@ -27,7 +27,7 @@ data_ratio: 1.0
 env_name: pointmaze-medium-navigate-v0
 eval_episodes: 50
 eval_gaussian: null
-eval_interval: 100000
+eval_interval: 5000
 eval_on_cpu: 0
 eval_start: 0
 eval_tasks: null
@@ -45,7 +45,7 @@ finetune:
   mc_similarity_threshold: 1.0
   mc_slack: 5
   min_steps: 10
-  num_steps: 50
+  num_steps: 0
   ratio: 0.5
   relevance_by_value: false
   replan_horizon: 100

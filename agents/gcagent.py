@@ -7,7 +7,7 @@ from utils.flax_utils import nonpytree_field, MetaTrainState, TrainState
 
 class GCAgent(flax.struct.PyTreeNode):
     rng: Any
-    network: Any
+    network: TrainState
     config: Any = nonpytree_field()
 
     @jax.jit
@@ -56,10 +56,39 @@ class MetaGCAgent(flax.struct.PyTreeNode):
         # Return a new immutable agent with updated network and PRNG + metrics
         return self.replace(meta_train_state=new_meta_train_state, rng=new_rng), info
 
-    @functools.partial(jax.jit, static_argnames=("is_fomaml",))
-    def meta_inner_update(self, train_batch, test_batch = None, is_fomaml=False):
+    @functools.partial(jax.jit, static_argnames=("is_fomaml", "i"))
+    def meta_inner_update(
+        self,
+        train_batch: dict,
+        i: int,
+        test_batch: Optional[dict] = None,
+        is_fomaml: bool = False,
+
+    ) -> tuple["MetaGCAgent", dict]:
+        """
+        Perform an inner-loop meta-update for a single task.
+
+        Args:
+            train_batch (dict): Training batch for inner adaptation.
+            i (int): Index of the task_batch.
+            test_batch (dict, optional): Test batch for meta-gradient computation. Defaults to None.
+            is_fomaml (bool, optional): Whether to use FOMAML-style gradient computation. Defaults to False.
+
+        Returns:
+            Tuple[MetaGCAgent, dict]:
+                - A new MetaGCAgent with updated meta_train_state reflecting the task adaptation result.
+                - An info dictionary with statistics from the inner update.
+        """
+        # Call get_inner_update_result and add the result to meta_train_state
+        updated_params, test_grads, info = self.get_inner_update_result(train_batch, test_batch, is_fomaml)
+        new_meta_train_state = self.meta_train_state.add_task_adaptation_result(updated_params, test_grads, i)
+        return self.replace(meta_train_state=new_meta_train_state), info
+
+
+    def get_inner_update_result(self, train_batch, test_batch = None, is_fomaml = True):
         new_rng, step_rng = jax.random.split(self.rng)
 
+        # loss_fn is partial of total loss giving step_rng
         def loss_fn(grad_params):
             return self.total_loss(train_batch, grad_params, rng=step_rng)
 
@@ -70,9 +99,8 @@ class MetaGCAgent(flax.struct.PyTreeNode):
         else:
             test_loss_fn = None
 
-
-        new_meta_train_state, info = self.meta_train_state.add_task_adaptation(loss_fn=loss_fn, num_steps=1, test_loss_fn=test_loss_fn, is_fomaml=is_fomaml)
-        return self.replace(meta_train_state=new_meta_train_state, rng=new_rng), info
+        updated_params, test_grads, info = self.meta_train_state.inner_update(loss_fn=loss_fn, num_steps=1, test_loss_fn=test_loss_fn, is_fomaml=is_fomaml)
+        return updated_params, test_grads, info
 
 
     @functools.partial(jax.jit, static_argnames=("use_model_merging",))

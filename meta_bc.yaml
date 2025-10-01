@@ -13,7 +13,7 @@ agent:
 # Hyperparameters specific to test-time fine-tuning
 finetune:
   ratio: 0.5           # ratio of fine-tuning data to be selected actively
-  num_steps: 50        # number of fine-tunining gradient steps per episode
+  num_steps: 0        # number of fine-tunining gradient steps per episode
   lr: 3.e-5            # fine-tuning learning rate
   actor_loss: bc     # overrides agent.actor_loss for fine-tuning
   alpha: null          # overrides agent.alpha for fine-tuning
@@ -34,7 +34,7 @@ finetune:
 
 train_steps: 1000000
 log_interval: 100
-eval_interval: 100000 # old 100000
+eval_interval: 5000 # old 100000
 save_interval: 100000
 eval_start: 000000  # Old: 800000
 
