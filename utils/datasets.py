@@ -534,9 +534,23 @@ class GCDataset:
 
         return goal_idxs
 
-    # This function implements the main fine-tuning logic for data selection
     def active_sample(self, batch_size: int, _filter, goal, ratio, fix_actor_goal, finetune_kwargs):
+        """
+        This function samples a batch of data for fine-tuning, combining both uniform and actively selected samples.
+        A portion of the batch is sampled uniformly, while the rest is sampled from transitions that satisfy a given filter.
+        For a specified percentage of the actively sampled transitions, the actor goals are set to a fixed goal.
 
+        Args:
+            batch_size (int): Total number of samples to draw.
+            _filter (array-like): Boolean mask or filter to select eligible transitions for active sampling.
+            goal (np.ndarray): The goal to assign to a subset of actor goals in the active batch.
+            ratio (float): Fraction of the batch to sample actively (between 0 and 1).
+            fix_actor_goal (float): Fraction of the active batch to set the actor goal to the provided goal.
+            finetune_kwargs (dict): Additional keyword arguments for fine-tuning logic.
+
+        Returns:
+            dict: A batch dictionary with concatenated uniform and active samples.
+        """
         finetune_bs = int(batch_size * ratio)
         # First, sample a batch normally
         uniform_batch = self.sample(batch_size - finetune_bs)

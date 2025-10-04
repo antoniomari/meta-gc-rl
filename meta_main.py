@@ -5,6 +5,7 @@ import random
 import time
 import psutil
 import gc
+import argparse
 from collections import defaultdict, OrderedDict
 
 
@@ -13,7 +14,7 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # 0=all, 1=INFO off, 2=WARNING off, 3=
 os.environ["TF_DETERMINISTIC_OPS"] = "1"
 os.environ["TF_CUDNN_DETERMINISTIC"] = "1"
 # Enable JAX compilation logging
-os.environ["JAX_LOG_COMPILES"] = "1"
+# os.environ["JAX_LOG_COMPILES"] = "1"
 
 import gymnasium as gym
 import wandb
@@ -43,6 +44,95 @@ def _to_np(x):
         return np.asarray(x.cpu())
     else:
         return np.asarray(x)
+
+
+def override_config_value(cfg: GCTTTConfig, key_path: str, value: str):
+    """Override a config value using dot notation (e.g., 'finetune.num_steps').
+
+    Args:
+        cfg: The configuration object to modify
+        key_path: Dot-separated path to the config value (e.g., 'finetune.num_steps')
+        value: String value to set (will be converted to appropriate type)
+    """
+    keys = key_path.split('.')
+    current = cfg
+
+    # Navigate to the parent of the target attribute
+    for key in keys[:-1]:
+        if hasattr(current, key):
+            current = getattr(current, key)
+        else:
+            raise ValueError(f"Config path '{key_path}' not found: '{key}' does not exist")
+
+    # Get the final key and set the value
+    final_key = keys[-1]
+    if not hasattr(current, final_key):
+        raise ValueError(f"Config path '{key_path}' not found: '{final_key}' does not exist")
+
+    # Get the current value to determine the type for conversion
+    current_value = getattr(current, final_key)
+
+    # Convert the string value to the appropriate type
+    if isinstance(current_value, bool):
+        converted_value = value.lower() in ('true', '1', 'yes', 'on')
+    elif isinstance(current_value, int):
+        converted_value = int(value)
+    elif isinstance(current_value, float):
+        converted_value = float(value)
+    elif current_value is None:
+        # Try to infer type from the string value
+        try:
+            converted_value = int(value)
+        except ValueError:
+            try:
+                converted_value = float(value)
+            except ValueError:
+                if value.lower() in ('true', 'false'):
+                    converted_value = value.lower() == 'true'
+                else:
+                    converted_value = value
+    else:
+        converted_value = value
+
+    setattr(current, final_key, converted_value)
+    print(f"Override: {key_path} = {converted_value} (type: {type(converted_value).__name__})")
+
+
+def parse_args():
+    """Parse command line arguments for config overrides."""
+    parser = argparse.ArgumentParser(
+        description="Train meta agent with optional config overrides",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python meta_main.py config.yaml --finetune.num_steps 100 --train_steps 50000
+  python meta_main.py config.yaml --finetune.num_steps 200 --train_steps 100000 --meta_algorithm reptile
+  python meta_main.py config.yaml --seed 42 --meta_algorithm maml
+  python meta_main.py config.yaml --agent.inner_loop_steps 10 --meta_algorithm maml
+  python meta_main.py config.yaml --agent.meta_batch_size 16 --agent.inner_loop_steps 5 --meta_algorithm maml
+  python meta_main.py config.yaml --eval_interval 5000 --meta_algorithm maml
+        """
+    )
+
+    parser.add_argument('config_file', help='Path to the YAML configuration file')
+    parser.add_argument('--finetune.num_steps', type=str, dest='finetune_num_steps',
+                        help='Override finetune.num_steps value')
+    parser.add_argument('--train_steps', type=str, dest='train_steps',
+                        help='Override train_steps value')
+    parser.add_argument('--meta_algorithm', type=str, dest='meta_algorithm',
+                        choices=['maml', 'fomaml', 'reptile'],
+                        help='Override meta_algorithm value (choices: maml, fomaml, reptile)')
+    parser.add_argument('--seed', type=int, dest='seed',
+                        help='Override seed value')
+    parser.add_argument('--agent.inner_loop_steps', type=int, dest='inner_loop_steps',
+                        help='Override agent.inner_loop_steps value')
+    parser.add_argument('--agent.meta_batch_size', type=int, dest='meta_batch_size',
+                        help='Override agent.meta_batch_size value')
+    parser.add_argument('--eval_interval', type=int, dest='eval_interval',
+                        help='Override eval_interval value')
+
+    return parser.parse_args()
+
 
 # META Learning methods to run: standard maml, FOMAML, Reptile
 
@@ -134,6 +224,8 @@ def fetch_goal_conditioned_batch(
         cached_starts = np.zeros((0, start_states_np.shape[1]), dtype=start_states_np.dtype)
         cached_goals = np.zeros((0, goals_np.shape[1]), dtype=goals_np.dtype)
 
+    # Timer for getting the filter
+    t_filter_start = time.time()
     # Vectorized cache lookup for all batch elements (on CPU)
     if cache.size > 0:
         # [B, N, D]
@@ -201,6 +293,11 @@ def fetch_goal_conditioned_batch(
                     filt,
                     max_len
                 )
+    t_filter_end = time.time()
+    print(f"Time for getting the filter: {t_filter_end - t_filter_start:.4f} seconds")
+
+    # Timer for fetching the batch
+    t_batch_start = time.time()
 
     # Now, for each batch element, build train/test batches
     # Vectorized: build all batches at once if possible, else use list comprehension
@@ -208,9 +305,11 @@ def fetch_goal_conditioned_batch(
     total_batch_size = 2 * batch_size_val
 
     # Prepare all batch args
+    t_all_batches_start = time.time()
     all_batches = []
     for i in range(batch_size):
         _filter = filters[i]
+        print(f"DEBUG: _filter: {_filter.sum()}")
         goal = goals[i]
         if _filter is None or (np.asarray(_filter) == 0).all():
             all_batches.append(None)
@@ -224,6 +323,8 @@ def fetch_goal_conditioned_batch(
                 finetune_kwargs=finetune_config,
             )
             all_batches.append(batch)
+    t_all_batches_end = time.time()
+    print(f"Time for getting all batches: {t_all_batches_end - t_all_batches_start:.4f} seconds")
 
     # Now split into train/test batches
     batches = []
@@ -253,6 +354,25 @@ def main(cfg: GCTTTConfig):
     # Set up logger.
     # split env_name by '-'
     exp_name = get_exp_name(cfg)
+
+    # Create group name based on meta learning algorithm and parameters
+    if cfg.meta_algorithm is None:
+        group_name = "PT"  # Pretraining
+    else:
+        group_name = cfg.meta_algorithm.upper()
+
+    # Add finetune steps to group name
+    if cfg.finetune.num_steps > 0:
+        group_name += f"-{cfg.finetune.num_steps}-TTT"
+    else:
+        group_name += "-0-TTT"
+
+    # Add meta learning parameters if meta algorithm is present
+    if cfg.meta_algorithm is not None:
+        inner_steps = cfg.agent.get("inner_loop_steps", 1)
+        meta_batch_size = cfg.agent.get("meta_batch_size", 32)
+        group_name += f"-{inner_steps}inner-{meta_batch_size}meta"
+
     # Build a serializable config for logging only
     wandb_config = {
         "run_group": cfg.run_group,
@@ -278,7 +398,7 @@ def main(cfg: GCTTTConfig):
         "eval_on_cpu": cfg.eval_on_cpu,
     }
     setup_wandb(
-        project="TTT_AllFinalRuns", group=cfg.run_group, name=exp_name, config=wandb_config
+        project="TTT_AllFinalRuns", group=group_name, name=exp_name, config=wandb_config
     )
 
     # Save current expanded config in the experiment dir
@@ -320,6 +440,7 @@ def main(cfg: GCTTTConfig):
         example_batch["observations"],
         example_batch["actions"],
         config_agent,
+        cfg.train_steps,
     )
 
     # Restore agent.
@@ -363,12 +484,14 @@ def main(cfg: GCTTTConfig):
         check_compilation_cache()
 
     # No / Full meta-learning here
-    META_LEARNING_START_STEP = 0 # 99_000
     META_BATCH_SIZE = config_agent["meta_batch_size"]   # Jonas: much 10-100 or more?
     # Start by cheating case with Meta-learning
     # GC-BC-TTT-No critic VS GC-BC-TTT-No critic with meta-learning in this environment
     # MAML, FOMAML, Reptile
-    META_LEARNING_ALGORITHM = "fomaml"
+    META_LEARNING_ALGORITHM = cfg.meta_algorithm
+    # META_LEARNING_START_STEP is 0 if meta algo is not none otherwise 1000000
+    META_LEARNING_START_STEP = 0 if META_LEARNING_ALGORITHM is not None else 1000000
+
 
     # test-time gradient steps x-axis (during TTT)
     # X-axis: pre-training steps (or actual pre-training time) -> y-axis success rate after TTT
@@ -382,15 +505,40 @@ def main(cfg: GCTTTConfig):
     ):
 
         if i < META_LEARNING_START_STEP:
-            batch = train_dataset.sample(config_agent["batch_size"])
-            agent, update_info = agent.update(batch)
-        else:
-            # 1. Sample task
-            task_batches = 0
-            t_start_sample_task = time.time()
-            memory_before_reset = get_memory_usage()
+            # 1. Sample 1 batch for one task
 
-            # Sample task METABATCH_SIZE times
+            fetched = False
+            while not fetched:
+                task_id = np.random.randint(1, 6)
+
+                # Measure memory and time before sampling
+                memory_before_fetch = get_memory_usage()
+                t_fetch_start = time.time()
+
+                # Sample start states and goals for each task
+                obs, info = env.reset(options=dict(task_id=task_id, render_goal=False))
+                start_states = [obs]
+                goals = [info.get("goal")]
+
+                # Get batches
+                batches = fetch_goal_conditioned_batch(
+                    agent, train_dataset, start_states, goals, cfg.finetune,
+                    threshold_dist=1.5,
+                    cache_max_size=500
+                )
+
+                if len(batches) > 0:
+                    fetched = True
+
+            t_fetch_end = time.time()
+            memory_after_fetch = get_memory_usage()
+            print(f"[Timer] Sampling 1 batch for 1 task took {t_fetch_end - t_fetch_start:.4f} seconds.")
+            print(f"[Memory] Before fetch: {memory_before_fetch:.2f} MB, After fetch: {memory_after_fetch:.2f} MB (+{memory_after_fetch - memory_before_fetch:.2f} MB)")
+
+            train_batch = batches[0][0]  # batches = [(train_batch, test_batch)]
+            agent, update_info = agent.update(train_batch)
+        else:
+            # 1. Sample task METABATCH_SIZE times
             task_ids = np.random.randint(1, 6, META_BATCH_SIZE)
 
             # Measure memory and time before sampling
@@ -422,11 +570,25 @@ def main(cfg: GCTTTConfig):
             t_inner_start = time.time()
             memory_before_inner = get_memory_usage()
 
-            for i, (train_batch, test_batch) in enumerate(task_batches):
+
+            update_info = []
+            for num_batch, (train_batch, test_batch) in enumerate(task_batches):
                 is_fomaml = META_LEARNING_ALGORITHM == "fomaml"
-                agent, update_info = agent.meta_inner_update(
-                    i, train_batch, test_batch, is_fomaml=is_fomaml
+                if META_LEARNING_ALGORITHM == "reptile":
+                    test_batch_arg = None
+                else:
+                    test_batch_arg = test_batch
+
+                # Perform multiple inner loop steps
+                inner_loop_steps = config_agent.get("inner_loop_steps", 1)
+                agent, batch_info = agent.meta_inner_update(
+                    num_batch, train_batch, test_batch_arg, is_fomaml=is_fomaml, num_steps=inner_loop_steps
                 )
+                update_info.append(batch_info)
+
+            # Average batch info
+            assert len(update_info) > 0
+            update_info = {k: np.mean([info[k] for info in update_info]) for k in update_info[0].keys()}
 
             t_inner_end = time.time()
             memory_after_inner = get_memory_usage()
@@ -464,6 +626,8 @@ def main(cfg: GCTTTConfig):
 
         # Log metrics.
         if i % cfg.log_interval == 0:
+
+            print(update_info)
             train_metrics = {f"training/{k}": v for k, v in update_info.items()}
             if val_dataset is not None:
                 # So... we sample only 1 batch for validation
@@ -616,11 +780,34 @@ def main(cfg: GCTTTConfig):
 
 
 if __name__ == "__main__":
+    # Parse command line arguments
+    args = parse_args()
 
-    if len(sys.argv) < 2:
-        print("No .yaml configs found.")
+    # Load base configuration
+    if not os.path.exists(args.config_file):
+        raise FileNotFoundError(f"Config file '{args.config_file}' not found.")
+    cfg = load_config(args.config_file)
 
-    if not os.path.exists(sys.argv[1]):
-        raise FileNotFoundError(f"Config file '{sys.argv[1]}' not found.")
-    cfg = load_config(sys.argv[1])
+    # Apply command line overrides
+    if args.finetune_num_steps is not None:
+        override_config_value(cfg, 'finetune.num_steps', args.finetune_num_steps)
+
+    if args.train_steps is not None:
+        override_config_value(cfg, 'train_steps', args.train_steps)
+
+    if args.meta_algorithm is not None:
+        override_config_value(cfg, 'meta_algorithm', args.meta_algorithm)
+
+    if args.seed is not None:
+        override_config_value(cfg, 'seed', args.seed)
+
+    if args.inner_loop_steps is not None:
+        cfg.agent['inner_loop_steps'] = args.inner_loop_steps
+
+    if args.meta_batch_size is not None:
+        cfg.agent['meta_batch_size'] = args.meta_batch_size
+
+    if args.eval_interval is not None:
+        override_config_value(cfg, 'eval_interval', args.eval_interval)
+
     main(cfg)

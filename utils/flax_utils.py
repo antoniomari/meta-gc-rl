@@ -199,11 +199,14 @@ class MetaTrainState(flax.struct.PyTreeNode):
     updated_params_list: Any  # PyTree: list of parameter PyTrees, fixed size [meta_batch_size]
     test_loss_grads: Any      # PyTree: list of gradient PyTrees, fixed size [meta_batch_size]
     meta_batch_size: int = nonpytree_field()
+    max_training_steps: int = nonpytree_field()
+    merging_eps: float = nonpytree_field()
 
     @classmethod
-    def create(cls, model_def, params, inner_opt=None, meta_opt=None, meta_batch_size=1, **kwargs):
+    def create(cls, model_def, params, inner_opt=None, meta_opt=None, meta_batch_size=1, max_training_steps=100000, **kwargs):
         """
         meta_batch_size: number of tasks per meta-update (fixed for the lifetime of the object)
+        max_training_steps: total number of meta-training steps (for annealing merging_eps)
         """
         if inner_opt is not None:
             inner_opt_state = inner_opt.init(params)
@@ -222,6 +225,9 @@ class MetaTrainState(flax.struct.PyTreeNode):
         updated_params_list = make_pytree_list(params, meta_batch_size)
         test_loss_grads = make_pytree_list(params, meta_batch_size)
 
+        # merging_eps starts at 1.0
+        merging_eps = 1.0
+
         return cls(
             step=1,
             apply_fn=model_def.apply,
@@ -234,6 +240,8 @@ class MetaTrainState(flax.struct.PyTreeNode):
             updated_params_list=updated_params_list,
             test_loss_grads=test_loss_grads,
             meta_batch_size=meta_batch_size,
+            max_training_steps=max_training_steps,
+            merging_eps=merging_eps,
             **kwargs,
         )
 
@@ -276,11 +284,12 @@ class MetaTrainState(flax.struct.PyTreeNode):
             meta_opt_state=new_meta_opt_state,
         ), info
 
-    def add_task_adaptation_result(self, updated_params, test_loss_grads, i):
+    def add_task_adaptation_result(self, updated_params, test_loss_grads, final_opt_state, i):
         self.updated_params_list[i] = updated_params
         if test_loss_grads is not None:
             self.test_loss_grads[i] = test_loss_grads
-        return self
+
+        return self.replace(inner_opt_state=final_opt_state)
 
     def inner_update(self, loss_fn, num_steps=1, test_loss_fn=None, is_fomaml=False):
         """
@@ -318,15 +327,17 @@ class MetaTrainState(flax.struct.PyTreeNode):
                     return test_loss_fn(updated_params)
                 test_grads, info = jax.grad(test_loss_on_orig_params, has_aux=True)(self.params)
 
-        return updated_params, test_grads, info
+        return updated_params, test_grads, final_opt_state, info
 
-    def meta_update(self, use_model_merging=False, eps=0.1, **kwargs):
+    def meta_update(self, use_model_merging=False, eps=None, **kwargs):
         """
         Perform a meta-update using the list of updated parameters.
         If use_model_merging is True, perform a model merge update:
             new_params = self.params + eps * (self.updated_params_list[0] - self.params)
         Otherwise, the meta-gradient is computed as the difference between the mean of updated parameters and the current parameters.
         Returns a new MetaTrainState with updated parameters and an empty updated_params_list.
+
+        eps: (optional) stepsize for model merging. If None, will use self.merging_eps (which is annealed).
         """
         if not self.updated_params_list:
             raise ValueError("No updated parameters to perform meta-update.")
@@ -335,10 +346,22 @@ class MetaTrainState(flax.struct.PyTreeNode):
             lambda *ps: jnp.stack(ps).mean(axis=0), *self.updated_params_list
         )
 
+        # Anneal merging_eps linearly from 1.0 to 0 over max_training_steps
         if use_model_merging:
-            # Model merging: interpolate between self.params and the average of updated params
+            if eps is None:
+                # Compute annealed merging_eps
+                if self.max_training_steps > 1:
+                    merging_eps = self.merging_eps - (self.step - 1) / (self.max_training_steps - 1)
+                    merging_eps = jnp.clip(merging_eps, 0.0, 1.0)
+                else:
+                    merging_eps = 1.0
+            else:
+                merging_eps = eps
+
+            print(f'Merging eps: {merging_eps}')
+
             merged_params = jax.tree_util.tree_map(
-                lambda p, up: p + eps * (up - p), self.params, mean_updated_params
+                lambda p, up: p + merging_eps * (up - p), self.params, mean_updated_params
             )
             return self.replace(
                 step=self.step + 1,

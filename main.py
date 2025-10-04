@@ -3,6 +3,7 @@ import yaml
 import os
 import random
 import time
+import argparse
 from collections import defaultdict
 
 os.environ["XLA_FLAGS"] = "--xla_gpu_deterministic_ops=true --xla_gpu_autotune_level=0"
@@ -26,6 +27,82 @@ import matplotlib.pyplot as plt
 import io
 from PIL import Image
 import importlib
+
+
+def override_config_value(cfg: GCTTTConfig, key_path: str, value: str):
+    """Override a config value using dot notation (e.g., 'finetune.num_steps').
+
+    Args:
+        cfg: The configuration object to modify
+        key_path: Dot-separated path to the config value (e.g., 'finetune.num_steps')
+        value: String value to set (will be converted to appropriate type)
+    """
+    keys = key_path.split('.')
+    current = cfg
+
+    # Navigate to the parent of the target attribute
+    for key in keys[:-1]:
+        if hasattr(current, key):
+            current = getattr(current, key)
+        else:
+            raise ValueError(f"Config path '{key_path}' not found: '{key}' does not exist")
+
+    # Get the final key and set the value
+    final_key = keys[-1]
+    if not hasattr(current, final_key):
+        raise ValueError(f"Config path '{key_path}' not found: '{final_key}' does not exist")
+
+    # Get the current value to determine the type for conversion
+    current_value = getattr(current, final_key)
+
+    # Convert the string value to the appropriate type
+    if isinstance(current_value, bool):
+        converted_value = value.lower() in ('true', '1', 'yes', 'on')
+    elif isinstance(current_value, int):
+        converted_value = int(value)
+    elif isinstance(current_value, float):
+        converted_value = float(value)
+    elif current_value is None:
+        # Try to infer type from the string value
+        try:
+            converted_value = int(value)
+        except ValueError:
+            try:
+                converted_value = float(value)
+            except ValueError:
+                if value.lower() in ('true', 'false'):
+                    converted_value = value.lower() == 'true'
+                else:
+                    converted_value = value
+    else:
+        converted_value = value
+
+    setattr(current, final_key, converted_value)
+    print(f"Override: {key_path} = {converted_value} (type: {type(converted_value).__name__})")
+
+
+def parse_args():
+    """Parse command line arguments for config overrides."""
+    parser = argparse.ArgumentParser(
+        description="Train agent with optional config overrides",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python main.py config.yaml --finetune.num_steps 100 --train_steps 50000
+  python main.py config.yaml --finetune.num_steps 200 --train_steps 100000 --meta_algorithm fomaml
+        """
+    )
+
+    parser.add_argument('config_file', help='Path to the YAML configuration file')
+    parser.add_argument('--finetune.num_steps', type=str, dest='finetune_num_steps',
+                        help='Override finetune.num_steps value')
+    parser.add_argument('--train_steps', type=str, dest='train_steps',
+                        help='Override train_steps value')
+    parser.add_argument('--meta_algorithm', type=str, dest='meta_algorithm',
+                        choices=['maml', 'fomaml', 'reptile'],
+                        help='Override meta_algorithm value (choices: maml, fomaml, reptile)')
+
+    return parser.parse_args()
 
 
 
@@ -274,11 +351,22 @@ def main(cfg: GCTTTConfig):
 
 
 if __name__ == "__main__":
+    # Parse command line arguments
+    args = parse_args()
 
-    if len(sys.argv) < 2:
-        print("No .yaml configs found.")
+    # Load base configuration
+    if not os.path.exists(args.config_file):
+        raise FileNotFoundError(f"Config file '{args.config_file}' not found.")
+    cfg = load_config(args.config_file)
 
-    if not os.path.exists(sys.argv[1]):
-        raise FileNotFoundError(f"Config file '{sys.argv[1]}' not found.")
-    cfg = load_config(sys.argv[1])
+    # Apply command line overrides
+    if args.finetune_num_steps is not None:
+        override_config_value(cfg, 'finetune.num_steps', args.finetune_num_steps)
+
+    if args.train_steps is not None:
+        override_config_value(cfg, 'train_steps', args.train_steps)
+
+    if args.meta_algorithm is not None:
+        override_config_value(cfg, 'meta_algorithm', args.meta_algorithm)
+
     main(cfg)

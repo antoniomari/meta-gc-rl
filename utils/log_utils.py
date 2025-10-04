@@ -51,6 +51,7 @@ def get_exp_name(cfg):
     # finetune.filter_by_recursive_mdp
     # finetune.min_steps
     # finetune.replan_horizon
+    # meta_algorithm (if not None)
     # timestamp
     # seed
     exp_name = cfg.agent["agent_name"]
@@ -65,10 +66,20 @@ def get_exp_name(cfg):
     exp_name += '_' + str(cfg.finetune.filter_by_recursive_mdp)
     exp_name += '_' + str(cfg.finetune.min_steps)
     exp_name += '_' + str(cfg.finetune.replan_horizon)
+    # Add inner_loop_steps if present
+    inner_loop_steps = cfg.agent.get("inner_loop_steps", 1)
+    exp_name += '_' + str(inner_loop_steps) + 'inner'
+    # Add meta_batch_size if present
+    meta_batch_size = cfg.agent.get("meta_batch_size", 32)
+    exp_name += '_' + str(meta_batch_size) + 'meta'
+    # Add meta_algorithm if present and not None
+    meta_algo = getattr(cfg, "meta_algorithm", None)
+    if meta_algo is not None:
+        exp_name += '_' + str(meta_algo)
     if cfg.finetune.num_steps > 0 and not cfg.finetune.relevance_by_value:
-        exp_name += '_' + "TTT_no_critic"
+        exp_name += f'_{cfg.finetune.num_steps}_TTT_no_critic'
     elif cfg.finetune.num_steps > 0 and cfg.finetune.relevance_by_value:
-        exp_name += '_' + "TTT"
+        exp_name += f'_{cfg.finetune.num_steps}_TTT'
     exp_name += '_' + datetime.now().strftime('%Y%m%d_%H%M%S')
     exp_name += f'_s{cfg.seed:03d}'
     return exp_name

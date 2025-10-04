@@ -424,7 +424,7 @@ def gc_ttt_critic_free(
 
     if _cfg_get(finetune_config, "num_steps", 0):
 
-        current_finetune_config = make_current_config(finetune_config)
+        current_finetune_config = make_current_config(finetune_config, env)
         if num_finetuning_steps is not None:
             num_steps = int(num_finetuning_steps) if _filter.sum() else 0
         else:
@@ -526,7 +526,7 @@ def evaluate(
 
     renders = []
 
-
+    """
     items = []
     for i in trange(config.eval_episodes + config.video_episodes):
         should_render = i >= config.eval_episodes
@@ -547,7 +547,7 @@ def evaluate(
     print(f"Creating filters for datasets took {filter_end_time - filter_start_time:.4f} seconds")
 
     print(results)
-
+    """
 
     for i in trange(config.eval_episodes + config.video_episodes):
 
@@ -556,13 +556,20 @@ def evaluate(
         # Render only video episodes
         should_render = i >= config.eval_episodes
 
-        observation, info = env.reset(
-            options=dict(task_id=task_id, render_goal=should_render)
+        start_state, info = env.reset(
+            options=dict(task_id=task_id, render_goal=should_render),
+            seed=i
         )
-
         # For each task (determined by task_id) there is a different goal
         goal = info.get("goal")
         goal_frame = info.get("goal_rendered")
+
+        print(f"Start state: {start_state} and goal: {goal}")
+
+
+
+        # Prepare filter
+        _filter = train_dataset.prepare_active_sample(agent, start_state, goal, config.finetune, log_filter=False)[0]
 
         # Simple script to plot critic and policy output in a 2D environment
         # We sample a batch from the training dataset, then calculate both values and actions on sampled batch
@@ -590,17 +597,17 @@ def evaluate(
                 train_dataset,
                 agent_ft,
                 env,
-                observation,
+                start_state,
                 config,
                 goal,
                 goal_frame,
                 should_render,
-                _filter=results[i][0],
+                _filter=_filter,
                 num_finetuning_steps=num_finetuning_steps
             )
 
             if i < config.eval_episodes:
-                print(info)
+                # print(info)
                 add_to(stats, flatten(info))
                 trajs.append(traj)
             else:

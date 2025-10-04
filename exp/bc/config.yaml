@@ -17,8 +17,9 @@ agent:
   encoder: null
   frame_stack: null
   gc_negative: true
+  inner_loop_steps: 16
   lr: 0.0003
-  meta_batch_size: 32
+  meta_batch_size: 8
   p_aug: 0.0
   value_geom_sample: false
   value_p_curgoal: 0.0
@@ -28,7 +29,7 @@ data_ratio: 1.0
 env_name: pointmaze-medium-navigate-v0
 eval_episodes: 50
 eval_gaussian: null
-eval_interval: 5000
+eval_interval: 10000
 eval_on_cpu: 0
 eval_start: 0
 eval_tasks: null
@@ -40,14 +41,14 @@ finetune:
   filter_by_mc: true
   filter_by_recursive_mdp: false
   filter_by_td: false
-  fix_actor_goal: 0.0
+  fix_actor_goal: 1.0
   lr: 3.0e-05
   mc_quantile: 0.2
   mc_similarity_threshold: 1.0
   mc_slack: 5
   min_steps: 10
   num_steps: 0
-  ratio: 0.5
+  ratio: 1.0
   relevance_by_value: false
   replan_horizon: 100
   reset_after_horizon: false
@@ -59,7 +60,7 @@ restore_path: null
 run_group: debug
 save_interval: 100000
 seed: 0
-train_steps: 1000000
+train_steps: 100000
 video_episodes: 0
 video_frame_skip: 3
 working_dir: exp/bc

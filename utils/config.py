@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, TypedDict
+from typing import Any, Dict, List, Optional, Union, TypedDict, Literal, cast
 
 import yaml
 
@@ -94,6 +94,7 @@ class GCTTTConfig:
 
     agent: Dict[str, Any] = field(default_factory=lambda: {"agent_name": "gciql", "actor_loss": "bc"})
     finetune: FinetuneConfig = field(default_factory=FinetuneConfig)
+    meta_algorithm: Optional[Literal["maml", "fomaml", "reptile"]] = None  # Options: "maml", "fomaml", "reptile"
 
     train_steps: int = 1_000_000
     log_interval: int = 5000
@@ -121,6 +122,7 @@ class GCTTTConfig:
             restore_epoch=data.get("restore_epoch", None),
             agent=data.get("agent", {"agent_name": "gciql", "actor_loss": "bc"}),
             finetune=FinetuneConfig(**data.get("finetune", {})),
+            meta_algorithm=cast(Literal["maml", "fomaml", "reptile"], data.get("meta_algorithm", cls.meta_algorithm)),
             train_steps=int(data.get("train_steps", cls.train_steps)),
             log_interval=int(data.get("log_interval", cls.log_interval)),
             eval_interval=int(data.get("eval_interval", cls.eval_interval)),

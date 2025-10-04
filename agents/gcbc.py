@@ -221,6 +221,7 @@ class MetaGCBCAgent(MetaGCAgent):
         ex_observations,
         ex_actions,
         config,
+        train_steps,
     ):
         """Create a new agent.
 
@@ -281,6 +282,7 @@ class MetaGCBCAgent(MetaGCAgent):
             inner_opt=inner_opt,
             meta_opt=meta_opt,
             meta_batch_size=config['meta_batch_size'],
+            max_training_steps=train_steps, # TODO: adjust config next
         )
 
         return cls(rng, meta_train_state=meta_train_state, config=flax.core.FrozenDict(**config))
