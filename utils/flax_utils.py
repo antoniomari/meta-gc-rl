@@ -203,6 +203,16 @@ class MetaTrainState(flax.struct.PyTreeNode):
     merging_eps: float = nonpytree_field()
 
     @classmethod
+    def make_pytree_list(cls, example, n):
+            return [jax.tree_util.tree_map(lambda x: x.copy() if hasattr(x, "copy") else jnp.array(x), example) for _ in range(n)]
+
+    def init_updated_params_list(self, params):
+        # Helper to create a list of deep-copied parameter PyTrees (not zerolike)
+        updated_params_list = self.make_pytree_list(params, self.meta_batch_size)
+        test_loss_grads = self.make_pytree_list(jax.tree_util.tree_map(jnp.zeros_like, params), self.meta_batch_size)
+        return updated_params_list, test_loss_grads
+
+    @classmethod
     def create(cls, model_def, params, inner_opt=None, meta_opt=None, meta_batch_size=1, max_training_steps=100000, **kwargs):
         """
         meta_batch_size: number of tasks per meta-update (fixed for the lifetime of the object)
@@ -218,12 +228,9 @@ class MetaTrainState(flax.struct.PyTreeNode):
         else:
             meta_opt_state = None
 
-        # Helper to create a list of parameter PyTrees with the same structure as params
-        def make_pytree_list(example, n):
-            return [jax.tree_util.tree_map(jnp.zeros_like, example) for _ in range(n)]
 
-        updated_params_list = make_pytree_list(params, meta_batch_size)
-        test_loss_grads = make_pytree_list(params, meta_batch_size)
+        updated_params_list = cls.make_pytree_list(params, meta_batch_size)
+        test_loss_grads = cls.make_pytree_list(jax.tree_util.tree_map(jnp.zeros_like, params), meta_batch_size)
 
         # merging_eps starts at 1.0
         merging_eps = 1.0
@@ -291,7 +298,7 @@ class MetaTrainState(flax.struct.PyTreeNode):
 
         return self.replace(inner_opt_state=final_opt_state)
 
-    def inner_update(self, loss_fn, num_steps=1, test_loss_fn=None, is_fomaml=False):
+    def inner_update(self, loss_fn, num_steps=1, test_loss_fn=None, is_fomaml=False, params=None):
         """
         Perform inner-loop adaptation for a task (N steps of optimizer), then add the resulting parameters to the list.
         If test_loss_fn is provided, compute the gradient of test_loss_fn evaluated at updated_params,
@@ -302,7 +309,8 @@ class MetaTrainState(flax.struct.PyTreeNode):
 
         # 1. Peform N steps of inner-loop optimization, train the model on the train_batch
         opt_state = self.inner_opt_state
-        params = self.params
+        if params is None:
+            params = self.params
 
         def step_fn(carry, _):
             params, opt_state = carry
@@ -325,7 +333,7 @@ class MetaTrainState(flax.struct.PyTreeNode):
                 # MAML: grad of test_loss_fn(updated_params) w.r.t. original params
                 def test_loss_on_orig_params(orig_params):
                     return test_loss_fn(updated_params)
-                test_grads, info = jax.grad(test_loss_on_orig_params, has_aux=True)(self.params)
+                test_grads, info = jax.grad(test_loss_on_orig_params, has_aux=True)(params)
 
         return updated_params, test_grads, final_opt_state, info
 
@@ -363,9 +371,14 @@ class MetaTrainState(flax.struct.PyTreeNode):
             merged_params = jax.tree_util.tree_map(
                 lambda p, up: p + merging_eps * (up - p), self.params, mean_updated_params
             )
+
+            updated_params_list, test_loss_grads = self.init_updated_params_list(merged_params)
+
             return self.replace(
                 step=self.step + 1,
                 params=merged_params,
+                updated_params_list=updated_params_list,
+                test_loss_grads=test_loss_grads,
                 **kwargs,
             )
         else:
@@ -378,10 +391,14 @@ class MetaTrainState(flax.struct.PyTreeNode):
             updates, new_meta_opt_state = self.meta_opt.update(meta_grads, self.meta_opt_state, self.params)
             new_params = optax.apply_updates(self.params, updates)
 
+            updated_params_list, test_loss_grads = self.init_updated_params_list(new_params)
+
             return self.replace(
                 step=self.step + 1,
                 params=new_params,
                 meta_opt_state=new_meta_opt_state,
+                updated_params_list=updated_params_list,
+                test_loss_grads=test_loss_grads,
                 **kwargs,
             )
 

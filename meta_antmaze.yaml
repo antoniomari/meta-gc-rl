@@ -1,8 +1,8 @@
 run_group: debug
 seed: 0
-env_name: pointmaze-medium-navigate-v0
+env_name: antmaze-medium-navigate-v0
 data_ratio: 1.0
-working_dir: exp/bc
+working_dir: exp/antmaze
 restore_path: null
 restore_epoch: null
 
@@ -10,7 +10,7 @@ agent:
   agent_name: meta_gcbc
   actor_loss: bc
   meta_batch_size: 32
-  inner_loop_steps: 8
+  inner_loop_steps: 10
 
 meta_algorithm: null  # Options: maml, fomaml, reptile
 train_on_test_goal: false  # Whether to use test goal for training batch fetching
@@ -19,7 +19,8 @@ train_on_test_goal: false  # Whether to use test goal for training batch fetchin
 finetune:
   ratio: 1.0           # ratio of fine-tuning data to be selected actively
   num_steps: 50        # number of fine-tunining gradient steps per episode
-  lr: 3.e-5            # fine-tuning learning rate
+  num_steps_list: [0, 10, 20, 50, 100]
+  lr: 3.e-4            # fine-tuning learning rate
   actor_loss: bc     # overrides agent.actor_loss for fine-tuning
   alpha: null          # overrides agent.alpha for fine-tuning
   batch_size: 1024     # fine-tuning batch size
@@ -37,11 +38,11 @@ finetune:
   min_steps: 10 # added
   replan_horizon: 100 # or 200 (added)  K in the paper
 
-train_steps: 20000
+train_steps: 50000
 log_interval: 10
-eval_interval: 2000 # old 100000
+eval_interval: 10000
 save_interval: 100000
-eval_start: 000000  # Old: 800000
+eval_start: 000000
 
 eval_tasks: null
 eval_episodes: 50

@@ -40,6 +40,7 @@ class CsvLogger:
 def get_exp_name(cfg):
     """Return the experiment name."""
     # experiment name consists:
+    # goal type prefix (TEST-GOALS or ALL-GOALS)
     # agent_name (gciql or hiql)
     # environment name parts: env_name_split[0] + '-' + env_name_split[2]
     # agent.actor_loss (bc or awr)
@@ -54,7 +55,10 @@ def get_exp_name(cfg):
     # meta_algorithm (if not None)
     # timestamp
     # seed
-    exp_name = cfg.agent["agent_name"]
+
+    # Add goal type prefix
+    goal_prefix = "TEST-GOALS" if getattr(cfg, "train_on_test_goal", False) else "ALL-GOALS"
+    exp_name = goal_prefix + "_" + cfg.agent["agent_name"]
     env_name_split = cfg.env_name.split('-')
     exp_name += '_' + env_name_split[0] + '-' + env_name_split[2]
     # exp_name += '_' + cfg.agent["actor_loss"] TODO: check

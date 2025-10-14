@@ -111,6 +111,7 @@ Examples:
   python meta_main.py config.yaml --agent.inner_loop_steps 10 --meta_algorithm maml
   python meta_main.py config.yaml --agent.meta_batch_size 16 --agent.inner_loop_steps 5 --meta_algorithm maml
   python meta_main.py config.yaml --eval_interval 5000 --meta_algorithm maml
+  python meta_main.py config.yaml --train_on_test_goal --use_random_batch
         """
     )
 
@@ -130,6 +131,14 @@ Examples:
                         help='Override agent.meta_batch_size value')
     parser.add_argument('--eval_interval', type=int, dest='eval_interval',
                         help='Override eval_interval value')
+    parser.add_argument('--use_random_batch', action='store_true', dest='use_random_batch',
+                        help='Use random batch sampling instead of goal-conditioned sampling')
+    parser.add_argument('--train_on_test_goal', action='store_true', dest='train_on_test_goal',
+                        help='Override train_on_test_goal to True (use test goal for training batch fetching)')
+    parser.add_argument('--actor_uniform_sample', action='store_true', dest='actor_uniform_sample',
+                        help='Set agent.actor_geom_sample to False (use uniform sampling instead of geometry sampling)')
+    parser.add_argument('--finetune.mc_quantile', type=float, dest='finetune_mc_quantile',
+                        help='Override finetune.mc_quantile value (float)')
 
     return parser.parse_args()
 
@@ -183,6 +192,9 @@ class DataSelectionCache:
         self.write_idx = (idx + 1) % self.cache_max_size
         if self.size < self.cache_max_size:
             self.size += 1
+
+
+
 
 def fetch_goal_conditioned_batch(
     agent: GCAgent,
@@ -279,7 +291,7 @@ def fetch_goal_conditioned_batch(
         # No for loop: use numpy vectorization is not possible for arbitrary python calls,
         # but we can use list comprehensions (which is as parallel as possible in python)
         results = [
-            train_dataset.prepare_active_sample(agent, s, g, finetune_config)
+            train_dataset.prepare_active_sample(agent, s, g, finetune_config, log_filter=False)
             for s, g in zip(miss_start_states, miss_goals)
         ]
         for idx, (filt, max_len) in zip(miss_indices, results):
@@ -294,7 +306,7 @@ def fetch_goal_conditioned_batch(
                     max_len
                 )
     t_filter_end = time.time()
-    print(f"Time for getting the filter: {t_filter_end - t_filter_start:.4f} seconds")
+    # print(f"Time for getting the filter: {t_filter_end - t_filter_start:.4f} seconds")
 
     # Timer for fetching the batch
     t_batch_start = time.time()
@@ -309,9 +321,8 @@ def fetch_goal_conditioned_batch(
     all_batches = []
     for i in range(batch_size):
         _filter = filters[i]
-        print(f"DEBUG: _filter: {_filter.sum()}")
         goal = goals[i]
-        if _filter is None or (np.asarray(_filter) == 0).all():
+        if _filter is None or _filter.sum() == 0:
             all_batches.append(None)
         else:
             batch = train_dataset.active_sample(
@@ -324,7 +335,7 @@ def fetch_goal_conditioned_batch(
             )
             all_batches.append(batch)
     t_all_batches_end = time.time()
-    print(f"Time for getting all batches: {t_all_batches_end - t_all_batches_start:.4f} seconds")
+    # print(f"Time for getting all batches: {t_all_batches_end - t_all_batches_start:.4f} seconds")
 
     # Now split into train/test batches
     batches = []
@@ -339,6 +350,201 @@ def fetch_goal_conditioned_batch(
             )
 
     return batches
+
+
+def fetch_random_batch(
+    train_dataset: GCDataset,
+    finetune_config,
+    batch_size: int = None
+):
+    """
+    Fetch a random batch from the dataset using dataset.sample function.
+
+    Args:
+        train_dataset: The training dataset
+        finetune_config: Fine-tuning configuration
+        batch_size: Batch size for sampling. If None, uses finetune_config.batch_size
+
+    Returns:
+        A tuple of (train_batch, test_batch) where both are random samples from the dataset
+    """
+    if batch_size is None:
+        batch_size = _cfg_get(finetune_config, "batch_size")
+
+    # Sample random batch from dataset
+    random_batch = train_dataset.sample(batch_size)
+
+    # Split into train and test batches (half each)
+    train_size = batch_size // 2
+    test_size = batch_size - train_size
+
+    train_batch = {k: v[:train_size] for k, v in random_batch.items()}
+    test_batch = {k: v[train_size:train_size + test_size] for k, v in random_batch.items()}
+
+    return (train_batch, test_batch)
+
+
+def sample_start_goal_pairs(
+    train_dataset: GCDataset,
+    env: gym.Env,
+    meta_batch_size: int,
+    train_on_test_goal: bool,
+):
+    """
+    Sample start and goal pairs from the dataset.
+    """
+    # Sample start states and goals for each task
+    start_states = []
+    goals = []
+
+    if train_on_test_goal:
+        # 1. Sample task METABATCH_SIZE times
+        task_ids = np.random.randint(1, 6, meta_batch_size)
+
+        for task_id in task_ids:
+            obs, info = env.reset(options=dict(task_id=task_id, render_goal=False))
+            start_states.append(obs)
+            goals.append(info.get("goal"))
+    else:
+        start_batch, goal_batch = fetch_random_batch(train_dataset, cfg.finetune, batch_size=2 * meta_batch_size)
+        start_states.extend(start_batch['observations'])
+        goals.extend(goal_batch['next_observations'])
+
+    return start_states, goals
+
+
+def evaluation_loop(
+    agent: GCAgent,
+    env: gym.Env,
+    cfg: GCTTTConfig,
+    train_dataset: GCDataset,
+    eval_logger: CsvLogger,
+    step: int,
+    num_ttt_steps: int):
+    print("Evaluating...")
+
+    if cfg.eval_on_cpu:
+        eval_agent = jax.device_put(agent, device=jax.devices("cpu")[0])
+    else:
+        eval_agent = agent
+    renders = []
+    eval_metrics = {}
+    overall_metrics = defaultdict(list)
+    task_infos = (
+        env.unwrapped.task_infos
+        if hasattr(env.unwrapped, "task_infos")
+        else env.task_infos
+    )
+
+    num_tasks = (
+        len(cfg.eval_tasks) if cfg.eval_tasks is not None else len(task_infos)
+    )
+    for task_id in tqdm.trange(1, num_tasks + 1):
+        task_name = task_infos[task_id - 1]["task_name"]
+        # Test-time fine-tuning happens in here
+        # Test-time fine-tuning happens in here
+        eval_start_time = time.time()
+        eval_info, trajs, cur_renders = evaluate(
+            agent=eval_agent,
+            env=env,
+            task_id=task_id,
+            config=cfg,
+            train_dataset=train_dataset,
+            num_ttt_steps=num_ttt_steps,
+        )
+        eval_duration = time.time() - eval_start_time
+        print(f"Evaluation for task {task_id} took {eval_duration:.2f} seconds")
+
+        # Simple script to plot rollouts, assuming that the first 2 dimensions
+        # of the data represent XY CoM coordinates.
+        # TODO: remove
+        plotit = True
+        if plotit:
+            buf = io.BytesIO()
+            _obs = np.stack(trajs[0]["observation"])
+            _background = train_dataset.sample(1000)["observations"]
+            plt.scatter(_background[:, 0], _background[:, 1])
+            plt.scatter(_obs[:, 0], _obs[:, 1])
+            # plt.savefig(f'Zfig_{exp_name}.png', dpi=900)
+            plt.savefig(buf, format="png", dpi=900)
+            plt.close()
+            buf.seek(0)
+            img = Image.open(buf)
+            img_array = np.array(img)
+            wandb.log({"Zfig": wandb.Image(img_array)}, step=step)
+            del img_array, img, buf
+
+        # --- MINIMAL MODIFICATION START ---
+
+        finetune_actor_loss_key = "finetune/actor/actor_loss"
+        # Check for the specific key and add its list to eval_metrics
+        if finetune_actor_loss_key in eval_info:
+            loss_list_raw = eval_info[finetune_actor_loss_key]
+            if isinstance(loss_list_raw, list):  # Make sure it's a list
+                try:
+                    # Convert JAX arrays/other numerics to standard Python floats
+                    loss_values_float = [
+                        (
+                            float(val.item())
+                            if hasattr(val, "item")
+                            else float(val)
+                        )
+                        for val in loss_list_raw
+                    ]
+
+                    # Add the list directly to eval_metrics.
+                    # Use a key that indicates it's the raw trend/list.
+                    # Replace '/' in the metric name segment with '_' for cleaner W&B key
+                    log_key_segment = finetune_actor_loss_key.replace("/", "_")
+                    eval_metrics[
+                        f"finetune/{task_name}_{log_key_segment}_trend"
+                    ] = loss_values_float
+                except Exception as e:
+                    # Log a warning if conversion fails, but don't crash
+                    print(
+                        f"Warning: Could not process {finetune_actor_loss_key} list for task {task_name}: {e}"
+                    )
+        # --- MINIMAL MODIFICATION END ---
+
+        renders.extend(cur_renders)
+        metric_names = ["success"]
+        eval_metrics.update(
+            {
+                f"evaluation/{task_name}_{k}/{num_ttt_steps}_TTT": v
+                for k, v in eval_info.items()
+                if k in metric_names
+            }
+        )
+        # wandb.log({f'evaluation_logged/{task_name}_{k}': v for k, v in eval_info.items() if k in metric_names})
+        for k, v in eval_info.items():
+            if k in metric_names:
+                overall_metrics[k].append(v)
+
+    # TODO: check are we averaging over task?
+    for k, v in overall_metrics.items():
+        eval_metrics[f"evaluation/overall_{k}/{num_ttt_steps}_TTT"] = np.mean(v)
+
+    if cfg.video_episodes > 0:
+        video = get_wandb_video(renders=renders, n_cols=num_tasks)
+        eval_metrics[f"video/{num_ttt_steps}_TTT"] = video
+
+    try:
+        # Use the same step as the training loop to maintain monotonic ordering
+        wandb.log(eval_metrics, step=step)
+    except Exception as e:
+        print(f"Error during wandb.log: {e}")
+
+    # Log to the separate eval_logger if it exists
+    try:
+        eval_logger.log(eval_metrics, step=step)
+    except Exception as e:
+        print(f"Error logging to eval_logger: {e}")
+
+    # Clear memory after evaluation
+    gc.collect()
+    jax.clear_caches()
+    print("[Memory] Cleared memory after evaluation")
+
 
 def main(cfg: GCTTTConfig):
 
@@ -355,11 +561,19 @@ def main(cfg: GCTTTConfig):
     # split env_name by '-'
     exp_name = get_exp_name(cfg)
 
+    env_name_short = cfg.env_name.split("-")[0]
+
     # Create group name based on meta learning algorithm and parameters
-    if cfg.meta_algorithm is None:
-        group_name = "PT"  # Pretraining
+    if cfg.train_steps == 0:
+        group_name = f"{env_name_short}-RANDOM-INIT"
+    elif cfg.meta_algorithm is None:
+        group_name = f"{env_name_short}-PT"  # Pretraining
     else:
-        group_name = cfg.meta_algorithm.upper()
+        group_name = f"{env_name_short}-{cfg.meta_algorithm.upper()}"
+
+    # Add goal type prefix to group name (only ALL-GOALS case)
+    if not cfg.train_on_test_goal:
+        group_name = "ALL-GOALS-" + group_name
 
     # Add finetune steps to group name
     if cfg.finetune.num_steps > 0:
@@ -372,6 +586,15 @@ def main(cfg: GCTTTConfig):
         inner_steps = cfg.agent.get("inner_loop_steps", 1)
         meta_batch_size = cfg.agent.get("meta_batch_size", 32)
         group_name += f"-{inner_steps}inner-{meta_batch_size}meta"
+
+    # Add batch sampling configuration to group name
+    if cfg.use_random_batch:
+        group_name += "-RANDOMBATCH"
+
+    # Add mc_quantile to group name
+    mc_quantile = cfg.finetune.get("mc_quantile")
+    if mc_quantile is not None:
+        group_name += f"-mc{mc_quantile}"
 
     # Build a serializable config for logging only
     wandb_config = {
@@ -396,6 +619,8 @@ def main(cfg: GCTTTConfig):
         "video_episodes": cfg.video_episodes,
         "video_frame_skip": cfg.video_frame_skip,
         "eval_on_cpu": cfg.eval_on_cpu,
+        "train_on_test_goal": cfg.train_on_test_goal,
+        "use_random_batch": cfg.use_random_batch,
     }
     setup_wandb(
         project="TTT_AllFinalRuns", group=group_name, name=exp_name, config=wandb_config
@@ -500,6 +725,18 @@ def main(cfg: GCTTTConfig):
     # two lines normal TTT
     # meta TTT
 
+    if cfg.train_steps == 0:
+        for num_ttt_steps in cfg.finetune.num_steps_list:
+            evaluation_loop(
+                agent=agent,
+                env=env,
+                cfg=cfg,
+                train_dataset=train_dataset,
+                eval_logger=eval_logger,
+                step=0,
+                num_ttt_steps=num_ttt_steps)
+        # Evaluate only
+
     for i in tqdm.tqdm(
         range(1, cfg.train_steps + 1), smoothing=0.1, dynamic_ncols=True
     ):
@@ -508,62 +745,58 @@ def main(cfg: GCTTTConfig):
             # 1. Sample 1 batch for one task
 
             fetched = False
+
+            # Measure memory and time before sampling
+            memory_before_fetch = get_memory_usage()
+            t_fetch_start = time.time()
+
             while not fetched:
                 task_id = np.random.randint(1, 6)
-
-                # Measure memory and time before sampling
-                memory_before_fetch = get_memory_usage()
-                t_fetch_start = time.time()
-
-                # Sample start states and goals for each task
-                obs, info = env.reset(options=dict(task_id=task_id, render_goal=False))
-                start_states = [obs]
-                goals = [info.get("goal")]
-
-                # Get batches
-                batches = fetch_goal_conditioned_batch(
-                    agent, train_dataset, start_states, goals, cfg.finetune,
-                    threshold_dist=1.5,
-                    cache_max_size=500
-                )
-
-                if len(batches) > 0:
+                if cfg.use_random_batch:
+                    # Use normal dataset sampling
+                    train_batch = train_dataset.sample(cfg.finetune.batch_size)
                     fetched = True
+                else:
+                    if cfg.train_on_test_goal:
+                        # Sample start states and goals for each task
+                        obs, info = env.reset(options=dict(task_id=task_id, render_goal=False))
+                        start_states = [obs]
+                        goals = [info.get("goal")]
+                    else:
+                        # Sample a random goal
+                        start_batch, goal_batch = fetch_random_batch(train_dataset, cfg.finetune, batch_size=2)
+                        start_states = start_batch['observations']
+                        goals = goal_batch['next_observations']
+
+                    # Get goal-conditioned batch
+                    batches = fetch_goal_conditioned_batch(
+                        agent, train_dataset, start_states, goals, cfg.finetune,
+                        threshold_dist=1.5,
+                        cache_max_size=5000
+                    )
+
+                    if len(batches) > 0:
+                        fetched = True
+                        train_batch = batches[0][0]  # batches = [(train_batch, test_batch)]
 
             t_fetch_end = time.time()
             memory_after_fetch = get_memory_usage()
             print(f"[Timer] Sampling 1 batch for 1 task took {t_fetch_end - t_fetch_start:.4f} seconds.")
             print(f"[Memory] Before fetch: {memory_before_fetch:.2f} MB, After fetch: {memory_after_fetch:.2f} MB (+{memory_after_fetch - memory_before_fetch:.2f} MB)")
 
-            train_batch = batches[0][0]  # batches = [(train_batch, test_batch)]
             agent, update_info = agent.update(train_batch)
         else:
-            # 1. Sample task METABATCH_SIZE times
-            task_ids = np.random.randint(1, 6, META_BATCH_SIZE)
-
             # Measure memory and time before sampling
             memory_before_fetch = get_memory_usage()
             t_fetch_start = time.time()
 
             # Sample start states and goals for each task
-            start_states = []
-            goals = []
-            for task_id in task_ids:
-                obs, info = env.reset(options=dict(task_id=task_id, render_goal=False))
-                start_states.append(obs)
-                goals.append(info.get("goal"))
-
-            # Get batches
-            task_batches = fetch_goal_conditioned_batch(
-                agent, train_dataset, start_states, goals, cfg.finetune,
-                threshold_dist=1.5,
-                cache_max_size=500
-            )
+            start_states, goals = sample_start_goal_pairs(train_dataset, env, META_BATCH_SIZE, cfg.train_on_test_goal)
 
             t_fetch_end = time.time()
             memory_after_fetch = get_memory_usage()
 
-            print(f"[Timer] Sampling {len(task_batches)} batches of tasks took {t_fetch_end - t_fetch_start:.4f} seconds.")
+            print(f"[Timer] Sampling batches took {t_fetch_end - t_fetch_start:.4f} seconds.")
             print(f"[Memory] Before fetch: {memory_before_fetch:.2f} MB, After fetch: {memory_after_fetch:.2f} MB (+{memory_after_fetch - memory_before_fetch:.2f} MB)")
 
             # --- Inner Update (Meta-Learning) ---
@@ -572,23 +805,27 @@ def main(cfg: GCTTTConfig):
 
 
             update_info = []
-            for num_batch, (train_batch, test_batch) in enumerate(task_batches):
-                is_fomaml = META_LEARNING_ALGORITHM == "fomaml"
-                if META_LEARNING_ALGORITHM == "reptile":
-                    test_batch_arg = None
-                else:
-                    test_batch_arg = test_batch
+            is_fomaml = META_LEARNING_ALGORITHM == "fomaml"
 
-                # Perform multiple inner loop steps
-                inner_loop_steps = config_agent.get("inner_loop_steps", 1)
-                agent, batch_info = agent.meta_inner_update(
-                    num_batch, train_batch, test_batch_arg, is_fomaml=is_fomaml, num_steps=inner_loop_steps
+            for inner_step in range(config_agent.get("inner_loop_steps", 1)):
+
+                # Fetch task batches
+                task_batches = fetch_goal_conditioned_batch(
+                    agent, train_dataset, start_states, goals, cfg.finetune,
+                    threshold_dist=1.5,
+                    cache_max_size=5000
                 )
-                update_info.append(batch_info)
 
-            # Average batch info
-            assert len(update_info) > 0
-            update_info = {k: np.mean([info[k] for info in update_info]) for k in update_info[0].keys()}
+                for num_task, (train_batch, test_batch) in enumerate(task_batches):
+
+                    test_batch_arg = None if META_LEARNING_ALGORITHM == "reptile" else test_batch
+
+                    agent, batch_info = agent.meta_inner_update(
+                        num_task, train_batch, test_batch_arg, is_fomaml=is_fomaml, num_steps=1
+                    )
+
+                    if inner_step == config_agent.get("inner_loop_steps", 1) - 1:
+                        update_info.append(batch_info)
 
             t_inner_end = time.time()
             memory_after_inner = get_memory_usage()
@@ -600,7 +837,11 @@ def main(cfg: GCTTTConfig):
                 f"After inner: {memory_after_inner:.2f} MB "
                 f"(+{memory_after_inner - memory_before_inner:.2f} MB)"
             )
+            if len(update_info) == 0:
+                continue
 
+            # Average batch info
+            update_info = {k: np.mean([info[k] for info in update_info]) for k in update_info[0].keys()}
 
             # --- Meta Update (Meta-Learning) ---
             t_meta_start = time.time()
@@ -646,130 +887,16 @@ def main(cfg: GCTTTConfig):
 
         # Evaluate agent.
         if i % cfg.eval_interval == 0 and i >= cfg.eval_start:
-            print("Evaluating...")
-            if cfg.eval_on_cpu:
-                eval_agent = jax.device_put(agent, device=jax.devices("cpu")[0])
-            else:
-                eval_agent = agent
-            renders = []
-            eval_metrics = {}
-            overall_metrics = defaultdict(list)
-            task_infos = (
-                env.unwrapped.task_infos
-                if hasattr(env.unwrapped, "task_infos")
-                else env.task_infos
-            )
 
-            # TODO: check this task_infos
-            num_tasks = (
-                cfg.eval_tasks if cfg.eval_tasks is not None else len(task_infos)
-            )
-            for task_id in tqdm.trange(1, num_tasks + 1):
-                task_name = task_infos[task_id - 1]["task_name"]
-                # Test-time fine-tuning happens in here
-                # Test-time fine-tuning happens in here
-                eval_start_time = time.time()
-                eval_info, trajs, cur_renders = evaluate(
-                    agent=eval_agent,
+            for num_ttt_steps in cfg.finetune.num_steps_list:
+                evaluation_loop(
+                    agent=agent,
                     env=env,
-                    task_id=task_id,
-                    config=cfg,
+                    cfg=cfg,
                     train_dataset=train_dataset,
-                )
-                eval_duration = time.time() - eval_start_time
-                print(f"Evaluation for task {task_id} took {eval_duration:.2f} seconds")
-
-                # Simple script to plot rollouts, assuming that the first 2 dimensions
-                # of the data represent XY CoM coordinates.
-                # TODO: remove
-                plotit = True
-                if plotit:
-                    buf = io.BytesIO()
-                    _obs = np.stack(trajs[0]["observation"])
-                    _background = train_dataset.sample(1000)["observations"]
-                    plt.scatter(_background[:, 0], _background[:, 1])
-                    plt.scatter(_obs[:, 0], _obs[:, 1])
-                    # plt.savefig(f'Zfig_{exp_name}.png', dpi=900)
-                    plt.savefig(buf, format="png", dpi=900)
-                    plt.close()
-                    buf.seek(0)
-                    img = Image.open(buf)
-                    img_array = np.array(img)
-                    wandb.log({"Zfig": wandb.Image(img_array)})
-                    del img_array, img, buf
-
-                # --- MINIMAL MODIFICATION START ---
-
-                finetune_actor_loss_key = "finetune/actor/actor_loss"
-                # Check for the specific key and add its list to eval_metrics
-                if finetune_actor_loss_key in eval_info:
-                    loss_list_raw = eval_info[finetune_actor_loss_key]
-                    if isinstance(loss_list_raw, list):  # Make sure it's a list
-                        try:
-                            # Convert JAX arrays/other numerics to standard Python floats
-                            loss_values_float = [
-                                (
-                                    float(val.item())
-                                    if hasattr(val, "item")
-                                    else float(val)
-                                )
-                                for val in loss_list_raw
-                            ]
-
-                            # Add the list directly to eval_metrics.
-                            # Use a key that indicates it's the raw trend/list.
-                            # Replace '/' in the metric name segment with '_' for cleaner W&B key
-                            log_key_segment = finetune_actor_loss_key.replace("/", "_")
-                            eval_metrics[
-                                f"finetune/{task_name}_{log_key_segment}_trend"
-                            ] = loss_values_float
-                        except Exception as e:
-                            # Log a warning if conversion fails, but don't crash
-                            print(
-                                f"Warning: Could not process {finetune_actor_loss_key} list for task {task_name}: {e}"
-                            )
-                # --- MINIMAL MODIFICATION END ---
-
-                renders.extend(cur_renders)
-                metric_names = ["success"]
-                eval_metrics.update(
-                    {
-                        f"evaluation/{task_name}_{k}": v
-                        for k, v in eval_info.items()
-                        if k in metric_names
-                    }
-                )
-                # wandb.log({f'evaluation_logged/{task_name}_{k}': v for k, v in eval_info.items() if k in metric_names})
-                for k, v in eval_info.items():
-                    if k in metric_names:
-                        overall_metrics[k].append(v)
-
-            # TODO: check are we averaging over task?
-            for k, v in overall_metrics.items():
-                eval_metrics[f"evaluation/overall_{k}"] = np.mean(v)
-
-            if cfg.video_episodes > 0:
-                video = get_wandb_video(renders=renders, n_cols=num_tasks)
-                eval_metrics["video"] = video
-
-            try:
-                # Assuming 'i' is your global training step counter
-                wandb.log(eval_metrics)
-            except Exception as e:
-                print(f"Error during wandb.log: {e}")
-
-            # Log to the separate eval_logger if it exists
-            try:
-                eval_logger.log(eval_metrics, step=i)
-            except Exception as e:
-                print(f"Error logging to eval_logger: {e}")
-
-            # Clear memory after evaluation
-            gc.collect()
-            jax.clear_caches()
-            print("[Memory] Cleared memory after evaluation")
-
-            time.sleep(10)  # Sleep for a minute to avoid too many logs in a short time.
+                    eval_logger=eval_logger,
+                    step=i,
+                    num_ttt_steps=num_ttt_steps)
 
         # Save agent.
         if i % cfg.save_interval == 0:
@@ -809,5 +936,19 @@ if __name__ == "__main__":
 
     if args.eval_interval is not None:
         override_config_value(cfg, 'eval_interval', args.eval_interval)
+
+    if args.use_random_batch:
+        cfg.use_random_batch = True
+
+    if args.train_on_test_goal:
+        cfg.train_on_test_goal = True
+
+    if args.actor_uniform_sample:
+        cfg.agent['actor_geom_sample'] = False
+
+    if args.finetune_mc_quantile is not None:
+        override_config_value(cfg, 'finetune.mc_quantile', str(args.finetune_mc_quantile))
+
+    print(f"Number of steps list: {cfg.finetune.num_steps_list}")
 
     main(cfg)

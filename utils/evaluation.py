@@ -19,7 +19,7 @@ from concurrent.futures import ThreadPoolExecutor
 from utils.config import GCTTTConfig
 import gymnasium as gym
 import time
-
+import gc
 
 
 def supply_rng(f, rng=jax.random.PRNGKey(0)):
@@ -210,7 +210,12 @@ def gc_ttt_critic(
     env,
     config: GCTTTConfig,
     goal,
+    finetune_config: FinetuneConfig,
 ):
+    # GC-TTT without critic
+    traj = defaultdict(list)
+    finetune_stats = defaultdict(list)
+    info = None
 
     done = False
     step = 0
@@ -227,41 +232,31 @@ def gc_ttt_critic(
 
     # Replanning loop: repeatedly fine-tune and execute a short horizon.
     while not done:
-        # Active test-time fine-tuning:
-        if old_train_state is not None:  # Replace the agent with the base one
-            agent = agent.replace(network=old_train_state, config=old_config)
-
-        # Copy config, state and optimizer state of the agent
-        agent, old_train_state, old_config = copy_current_agent(agent, finetune_config)
+        # working copy for finetuning
+        agent_ft = clone_agent(agent)
 
         # New finetuning config?
         finetune_stats = defaultdict(list)
-        if hasattr(finetune_config, "unfreeze"):
-            current_finetune_config = finetune_config.unfreeze()
-        else:
-            current_finetune_config = dict(finetune_config)
 
-        if current_finetune_config.get(
-            "cube_env", False
-        ):  # A way to detect CubeEnv, or use env.spec.id
+
+        if _cfg_get(finetune_config, "cube_env", False):
+            # A way to detect CubeEnv, or use env.spec.id
             # env._num_cubes should be available if 'env' is an instance of your CubeEnv
             num_cubes = (
                 env._num_cubes if hasattr(env, "_num_cubes") else 1
             )  # Default to 1 if not found, adjust as needed
-            current_finetune_config["num_cubes"] = num_cubes
+            finetune_config["num_cubes"] = num_cubes
             # The 9 elements per cube state: 3 (pos) + 4 (quat) + 2 (sin/cos yaw)
-            current_finetune_config["proprio_dim"] = (
+            finetune_config["proprio_dim"] = (
                 env.observation_space.shape[0] - num_cubes * 9
             )
-        finetune_config_to_pass = current_finetune_config
 
         # Filtering the dataset for active test-time fine-tuning.
         _filter, max_len = train_dataset.prepare_active_sample(
             agent,
             observation,
             goal,
-            finetune_config_to_pass,
-            exp_name=exp_name,
+            finetune_config,
             log_filter=False,
         )
 
@@ -277,31 +272,33 @@ def gc_ttt_critic(
                     goal,
                     _cfg_get(finetune_config, "ratio"),
                     _cfg_get(finetune_config, "fix_actor_goal"),
-                    finetune_kwargs=finetune_config_to_pass,
+                    finetune_kwargs=finetune_config,
                 )
                 # Update the agent with the sampled batch.
-                agent, update_info = agent.update(batch, finetuning=True)
+                agent_ft, update_info = agent_ft.update(batch, finetuning=True)
                 add_to(finetune_stats, flatten(update_info))
 
             # Log the filter after fine-tuning, also show the cuurent state of the agent as red
-            if not _cfg_get(current_finetune_config, "visual_env", False):
-                _obs = train_dataset.dataset[
-                    "observations"
-                ]  # assuming dataset is available here
-                filtered_pbs = _obs[_filter.astype(bool)]
-                buf = io.BytesIO()
-                plt.scatter(_obs[:5000, 0], _obs[:5000, 1])
-                plt.scatter(filtered_pbs[:, 0], filtered_pbs[:, 1], alpha=0.5)
-                plt.scatter(observation[0], observation[1], color="red", s=50)
-                plt.savefig(buf, format="png")
-                plt.close()
-                buf.seek(0)
-                img = Image.open(buf)
-                img_array = np.array(img)
-                wandb.log({"ZFilter_Partial": wandb.Image(img_array)})
-                del img, img_array, buf
+            if not _cfg_get(finetune_config, "visual_env", False):
 
-        # TODO: understand why is neeeded to supply rng again
+                pass # TODO: restore this code accordingly
+                """
+                    _obs = train_dataset.dataset[
+                        "observations"
+                    ]  # assuming dataset is available here
+                    filtered_pbs = _obs[_filter.astype(bool)]
+                    buf = io.BytesIO()
+                    plt.scatter(_obs[:5000, 0], _obs[:5000, 1])
+                    plt.scatter(filtered_pbs[:, 0], filtered_pbs[:, 1], alpha=0.5)
+                    plt.scatter(observation[0], observation[1], color="red", s=50)
+                    plt.savefig(buf, format="png")
+                    plt.close()
+                    buf.seek(0)
+                    img = Image.open(buf)
+                    img_array = np.array(img)
+                    wandb.log({"ZFilter_Partial": wandb.Image(img_array)})
+                    del img, img_array, buf
+                """
         actor_fn = supply_rng(
             agent.sample_actions,
             rng=jax.random.PRNGKey(np.random.randint(0, 2**32)),
@@ -315,9 +312,9 @@ def gc_ttt_critic(
             if _step > max_len and _cfg_get(
                 finetune_config, "reset_after_horizon", False
             ):
-                agent = agent.replace(network=old_train_state, config=old_config)
+                agent_ft = clone_agent(agent)
                 actor_fn = supply_rng(
-                    agent.sample_actions,
+                    agent_ft.sample_actions,
                     rng=jax.random.PRNGKey(np.random.randint(0, 2**32)),
                 )
 
@@ -325,12 +322,12 @@ def gc_ttt_critic(
             action = actor_fn(
                 observations=observation,
                 goals=goal,
-                temperature=eval_temperature,
+                temperature=config.eval_temperature,
             )
             action = np.array(action)
-            if not config.get("discrete"):
-                if eval_gaussian is not None:
-                    action = np.random.normal(action, eval_gaussian)
+            if not config.agent.get("discrete"):
+                if config.eval_gaussian is not None:
+                    action = np.random.normal(action, config.eval_gaussian)
                 action = np.clip(action, -1, 1)
 
             next_observation, reward, terminated, truncated, info = env.step(action)
@@ -356,6 +353,7 @@ def gc_ttt_critic(
             add_to(traj, transition)
             observation = next_observation  # Update state for the next replan phase.
 
+
     # At the end of the recursive loop, aggregate all collected filters.
     if aggregated_filters:
 
@@ -369,8 +367,10 @@ def gc_ttt_critic(
 
         wandb.log({"Z_NumberOfFineTunePoints": numberofallfiltered})
 
-        visual_env = current_finetune_config.get("visual_env", False)
+        visual_env = _cfg_get(finetune_config, "visual_env", False)
         if not visual_env:
+            pass # TODO: restore this code accordingly
+            """
 
             _obs = train_dataset.dataset[
                 "observations"
@@ -386,21 +386,19 @@ def gc_ttt_critic(
             img_array = np.array(img)
             wandb.log({"ZFilter": wandb.Image(img_array)})
             del img, img_array, buf
+            """
     del aggregated_filters
-    import gc
 
     gc.collect()
 
-    if i < num_eval_episodes:
-        add_to(stats, flatten(info))
-        trajs.append(traj)
-    else:
-        renders.append(np.array(render))
-    visual_env = current_finetune_config.get("visual_env", False)
+
+    visual_env = _cfg_get(finetune_config, "visual_env", False)
     if not visual_env:
         # TODO: restore?
         # make_plots(train_dataset, agent, goal, "post", _cfg_get(finetune_config, "saw", False))
         pass
+
+    return traj, info, finetune_stats, render
 
 
 def gc_ttt_critic_free(
@@ -413,7 +411,7 @@ def gc_ttt_critic_free(
     goal_frame,
     should_render: bool,
     _filter,
-    num_finetuning_steps: Optional[int] = None
+    num_ttt_steps: Optional[int] = None
 ):
     # GC-TTT without critic
     traj = defaultdict(list)
@@ -425,8 +423,8 @@ def gc_ttt_critic_free(
     if _cfg_get(finetune_config, "num_steps", 0):
 
         current_finetune_config = make_current_config(finetune_config, env)
-        if num_finetuning_steps is not None:
-            num_steps = int(num_finetuning_steps) if _filter.sum() else 0
+        if num_ttt_steps is not None:
+            num_steps = int(num_ttt_steps) if _filter.sum() else 0
         else:
             num_steps = int(_cfg_get(finetune_config, "num_steps", 0)) if _filter.sum() else 0
 
@@ -499,7 +497,7 @@ def evaluate(
     config: GCTTTConfig,
     task_id: int,
     train_dataset: GCDataset,
-    num_finetuning_steps: Optional[int] = None
+    num_ttt_steps: Optional[int] = None
 ):
     """Evaluate the agent in the environment.
 
@@ -564,9 +562,8 @@ def evaluate(
         goal = info.get("goal")
         goal_frame = info.get("goal_rendered")
 
-        print(f"Start state: {start_state} and goal: {goal}")
-
-
+        # Debug print: uncomment if needed
+        # print(f"Start state: {start_state} and goal: {goal}")
 
         # Prepare filter
         _filter = train_dataset.prepare_active_sample(agent, start_state, goal, config.finetune, log_filter=False)[0]
@@ -585,12 +582,13 @@ def evaluate(
         if recursive_mdp:
             # Default GC-TTT (with critic)
             # - recursive_mdp = True
-            gc_ttt_critic(
+            traj, info, finetune_stats, render = gc_ttt_critic(
                 train_dataset,
                 agent_ft,
                 env,
                 config,
                 goal,
+                finetune_config=config.finetune,
             )
         else:
             traj, info, finetune_stats, render = gc_ttt_critic_free(
@@ -603,7 +601,7 @@ def evaluate(
                 goal_frame,
                 should_render,
                 _filter=_filter,
-                num_finetuning_steps=num_finetuning_steps
+                num_ttt_steps=num_ttt_steps
             )
 
             if i < config.eval_episodes:

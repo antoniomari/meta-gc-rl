@@ -7,3 +7,4 @@ matplotlib
 moviepy
 wandb
 gymnasium
+pandas

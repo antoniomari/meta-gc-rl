@@ -79,12 +79,12 @@ class MetaGCAgent(flax.struct.PyTreeNode):
                 - An info dictionary with statistics from the inner update.
         """
         # Call get_inner_update_result and add the result to meta_train_state
-        updated_params, test_grads, final_opt_state, info = self.get_inner_update_result(train_batch, test_batch, is_fomaml, num_steps)
+        updated_params, test_grads, final_opt_state, info = self.get_inner_update_result(train_batch, test_batch, is_fomaml, num_steps, params_idx=i)
         new_meta_train_state = self.meta_train_state.add_task_adaptation_result(updated_params, test_grads, final_opt_state, i)
         return self.replace(meta_train_state=new_meta_train_state), info
 
-    @functools.partial(jax.jit, static_argnames=("is_fomaml", "num_steps"))
-    def get_inner_update_result(self, train_batch, test_batch = None, is_fomaml = True, num_steps = 1):
+    @functools.partial(jax.jit, static_argnames=("is_fomaml", "num_steps", "params_idx"))
+    def get_inner_update_result(self, train_batch, test_batch = None, is_fomaml = True, num_steps = 1, params_idx: int = None):
         """
         Get the result of the inner update for a single task.
         Args:
@@ -112,7 +112,7 @@ class MetaGCAgent(flax.struct.PyTreeNode):
         else:
             test_loss_fn = None
 
-        updated_params, test_grads, final_opt_state, info = self.meta_train_state.inner_update(loss_fn=loss_fn, num_steps=num_steps, test_loss_fn=test_loss_fn, is_fomaml=is_fomaml)
+        updated_params, test_grads, final_opt_state, info = self.meta_train_state.inner_update(loss_fn=loss_fn, num_steps=num_steps, test_loss_fn=test_loss_fn, is_fomaml=is_fomaml, params=self.meta_train_state.updated_params_list[params_idx])
         return updated_params, test_grads, final_opt_state, info
 
 
@@ -123,6 +123,4 @@ class MetaGCAgent(flax.struct.PyTreeNode):
         meta_train_state: MetaTrainState = self.meta_train_state
         new_meta_train_state = meta_train_state.meta_update(use_model_merging)
         return self.replace(meta_train_state=new_meta_train_state)
-
-
 

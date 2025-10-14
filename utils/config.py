@@ -44,6 +44,7 @@ class FinetuneConfig:
 
     ratio: float = 0.5
     num_steps: int = 0
+    num_steps_list: List[int] = field(default_factory=lambda: [0, 5, 10, 20, 50])
     lr: float = 3e-5
     actor_loss: str = "ddpgbc"
     alpha: Optional[float] = None
@@ -95,6 +96,8 @@ class GCTTTConfig:
     agent: Dict[str, Any] = field(default_factory=lambda: {"agent_name": "gciql", "actor_loss": "bc"})
     finetune: FinetuneConfig = field(default_factory=FinetuneConfig)
     meta_algorithm: Optional[Literal["maml", "fomaml", "reptile"]] = None  # Options: "maml", "fomaml", "reptile"
+    train_on_test_goal: bool = False  # Whether to use test goal for training batch fetching
+    use_random_batch: bool = False  # Whether to use random batch sampling instead of goal-conditioned
 
     train_steps: int = 1_000_000
     log_interval: int = 5000
@@ -123,6 +126,8 @@ class GCTTTConfig:
             agent=data.get("agent", {"agent_name": "gciql", "actor_loss": "bc"}),
             finetune=FinetuneConfig(**data.get("finetune", {})),
             meta_algorithm=cast(Literal["maml", "fomaml", "reptile"], data.get("meta_algorithm", cls.meta_algorithm)),
+            train_on_test_goal=bool(data.get("train_on_test_goal", cls.train_on_test_goal)),
+            use_random_batch=bool(data.get("use_random_batch", cls.use_random_batch)),
             train_steps=int(data.get("train_steps", cls.train_steps)),
             log_interval=int(data.get("log_interval", cls.log_interval)),
             eval_interval=int(data.get("eval_interval", cls.eval_interval)),
