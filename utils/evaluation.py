@@ -7,6 +7,7 @@ from utils.config import FinetuneConfig
 from typing import Optional, Any
 import optax
 import numpy as np
+import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import io
 import wandb
@@ -208,10 +209,15 @@ def gc_ttt_critic(
     train_dataset: GCDataset,
     agent: GCAgent,
     env,
+    observation,
     config: GCTTTConfig,
     goal,
-    finetune_config: FinetuneConfig,
+    goal_frame,
+    should_render: bool,
+    num_ttt_steps: Optional[int] = None
 ):
+
+    finetune_config = config.finetune
     # GC-TTT without critic
     traj = defaultdict(list)
     finetune_stats = defaultdict(list)
@@ -227,19 +233,32 @@ def gc_ttt_critic(
         rng=jax.random.PRNGKey(np.random.randint(0, 2**32)),
     )
 
-    # Define how many steps to execute between replanning phases.
-    replan_horizon = int(_cfg_get(finetune_config, "replan_horizon", 100))
+    # Define how many steps to execute between replanning phases. K in the paper.
+    replan_horizon: int = finetune_config.get("replan_horizon", 100)
+
+    # Define how many steps to finetune
+    num_steps: int = num_ttt_steps if num_ttt_steps is not None else finetune_config.get("num_steps", 0)
 
     # Replanning loop: repeatedly fine-tune and execute a short horizon.
+    agent_ft = None
     while not done:
         # working copy for finetuning
+        # if agent_ft is not None:
+            # check if parameters are equal
+            # using jax.tree_util.tree_all
+            #print("Before cloning: ",
+            #    jax.tree_util.tree_all(jax.tree_map(lambda x, y: jnp.array_equal(x, y), agent.network.params, agent_ft.network.params))
+            #)
         agent_ft = clone_agent(agent)
+        #print("After cloning: ",
+        #    jax.tree_util.tree_all(jax.tree_map(lambda x, y: jnp.array_equal(x, y), agent.network.params, agent_ft.network.params))
+        #)
 
         # New finetuning config?
         finetune_stats = defaultdict(list)
 
 
-        if _cfg_get(finetune_config, "cube_env", False):
+        if finetune_config.get("cube_env", False):
             # A way to detect CubeEnv, or use env.spec.id
             # env._num_cubes should be available if 'env' is an instance of your CubeEnv
             num_cubes = (
@@ -252,6 +271,8 @@ def gc_ttt_critic(
             )
 
         # Filtering the dataset for active test-time fine-tuning.
+
+        filter_start_time = time.time()
         _filter, max_len = train_dataset.prepare_active_sample(
             agent,
             observation,
@@ -259,21 +280,24 @@ def gc_ttt_critic(
             finetune_config,
             log_filter=False,
         )
+        filter_end_time = time.time()
+        # print(f"[Timing] Filtering dataset for active test-time fine-tuning took {filter_end_time - filter_start_time:.4f} seconds")
 
         aggregated_filters.append(_filter)
         if _filter.sum() > 0:
             # Finetune for N steps
-            for _ in range(_cfg_get(finetune_config, "num_steps", 0)):
+            for i in range(num_steps):
                 # Sample a batch from the dataset using the filter.
                 # The batch will contain only the samples that match the filter.
                 batch = train_dataset.active_sample(
-                    _cfg_get(finetune_config, "batch_size"),
+                    finetune_config.get("batch_size", 1024),
                     _filter,
                     goal,
-                    _cfg_get(finetune_config, "ratio"),
-                    _cfg_get(finetune_config, "fix_actor_goal"),
+                    finetune_config.get("ratio", 1.0),
+                    finetune_config.get("fix_actor_goal", 1.0),
                     finetune_kwargs=finetune_config,
                 )
+
                 # Update the agent with the sampled batch.
                 agent_ft, update_info = agent_ft.update(batch, finetuning=True)
                 add_to(finetune_stats, flatten(update_info))
@@ -299,8 +323,10 @@ def gc_ttt_critic(
                     wandb.log({"ZFilter_Partial": wandb.Image(img_array)})
                     del img, img_array, buf
                 """
+        else:
+            print(f"Empty filter")
         actor_fn = supply_rng(
-            agent.sample_actions,
+            agent_ft.sample_actions,
             rng=jax.random.PRNGKey(np.random.randint(0, 2**32)),
         )
 
@@ -309,9 +335,8 @@ def gc_ttt_critic(
             if done:
                 break
             # check if finetune.reset_after_horizon is set to True and enter the loop
-            if _step > max_len and _cfg_get(
-                finetune_config, "reset_after_horizon", False
-            ):
+            if _step > max_len and finetune_config.get("reset_after_horizon", False):
+
                 agent_ft = clone_agent(agent)
                 actor_fn = supply_rng(
                     agent_ft.sample_actions,
@@ -330,17 +355,20 @@ def gc_ttt_critic(
                     action = np.random.normal(action, config.eval_gaussian)
                 action = np.clip(action, -1, 1)
 
+            # info contains "success" and is overwritten every time
+            # So we get the success from the last step
             next_observation, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
             step += 1
             done = done or step >= 3000
 
-            if should_render and (step % video_frame_skip == 0 or done):
-                frame = env.render().copy()
-                if goal_frame is not None:
-                    render.append(np.concatenate([goal_frame, frame], axis=0))
-                else:
-                    render.append(frame)
+            # TODO: restore this code accordingly
+            #if should_render and (step % video_frame_skip == 0 or done):
+            #    frame = env.render().copy()
+            #    if goal_frame is not None:
+            #        render.append(np.concatenate([goal_frame, frame], axis=0))
+            #    else:
+            #        render.append(frame)
 
             transition = dict(
                 observation=observation,
@@ -353,7 +381,6 @@ def gc_ttt_critic(
             add_to(traj, transition)
             observation = next_observation  # Update state for the next replan phase.
 
-
     # At the end of the recursive loop, aggregate all collected filters.
     if aggregated_filters:
 
@@ -365,7 +392,7 @@ def gc_ttt_critic(
             # check non zero elements in the f and add to numberofallfiltered
             numberofallfiltered += np.count_nonzero(f)
 
-        wandb.log({"Z_NumberOfFineTunePoints": numberofallfiltered})
+        # TODO: restore wandb.log({"Z_NumberOfFineTunePoints": numberofallfiltered})
 
         visual_env = _cfg_get(finetune_config, "visual_env", False)
         if not visual_env:
@@ -392,7 +419,7 @@ def gc_ttt_critic(
     gc.collect()
 
 
-    visual_env = _cfg_get(finetune_config, "visual_env", False)
+    visual_env = finetune_config.get("visual_env", False)
     if not visual_env:
         # TODO: restore?
         # make_plots(train_dataset, agent, goal, "post", _cfg_get(finetune_config, "saw", False))
@@ -548,7 +575,6 @@ def evaluate(
     """
 
     for i in trange(config.eval_episodes + config.video_episodes):
-
         agent_ft = clone_agent(agent)             # working copy for finetuning
 
         # Render only video episodes
@@ -577,7 +603,7 @@ def evaluate(
             # make_plots(train_dataset, agent, goal, "pre", _cfg_get(finetune_config, "saw", False))
             pass
 
-        recursive_mdp = _cfg_get(config.finetune, "filter_by_recursive_mdp", False)
+        recursive_mdp = config.finetune.get("filter_by_recursive_mdp", False)
 
         if recursive_mdp:
             # Default GC-TTT (with critic)
@@ -586,9 +612,12 @@ def evaluate(
                 train_dataset,
                 agent_ft,
                 env,
-                config,
-                goal,
-                finetune_config=config.finetune,
+                observation=start_state,
+                goal=goal,
+                config=config,
+                goal_frame=goal_frame,
+                should_render=should_render,
+                num_ttt_steps=num_ttt_steps
             )
         else:
             traj, info, finetune_stats, render = gc_ttt_critic_free(
@@ -604,22 +633,21 @@ def evaluate(
                 num_ttt_steps=num_ttt_steps
             )
 
-            if i < config.eval_episodes:
-                # print(info)
-                add_to(stats, flatten(info))
-                trajs.append(traj)
-            else:
-                renders.append(np.array(render))
+        if i < config.eval_episodes:
+            # print(info)
+            add_to(stats, flatten(info))
+            trajs.append(traj)
+        else:
+            renders.append(np.array(render))
 
         # Reset agent state after each episode
         agent = restore_agent_from_snapshot(agent, agent_snapshot)
 
-    stats.update({"finetune/" + k: v for k, v in finetune_stats.items()})
+    finetune_stats = {"finetune/" + k: v for k, v in finetune_stats.items()}
+    add_to(stats, finetune_stats)
 
     # Aggregate statistics over eval_episodes
     for k, v in stats.items():
         stats[k] = np.mean(v)
-
-    print(f"Stats: {stats}")
 
     return stats, trajs, renders

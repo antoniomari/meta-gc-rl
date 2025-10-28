@@ -2,7 +2,7 @@ import functools
 import glob
 import os
 import pickle
-from typing import Any, Dict, Mapping, Sequence, List
+from typing import Any, Dict, Mapping, Sequence, List, Optional
 
 import flax
 import flax.linen as nn
@@ -213,7 +213,7 @@ class MetaTrainState(flax.struct.PyTreeNode):
         return updated_params_list, test_loss_grads
 
     @classmethod
-    def create(cls, model_def, params, inner_opt=None, meta_opt=None, meta_batch_size=1, max_training_steps=100000, **kwargs):
+    def create(cls, model_def, params, inner_opt=None, meta_opt=None, meta_batch_size=1, max_training_steps=100000, merging_eps=1.0, **kwargs):
         """
         meta_batch_size: number of tasks per meta-update (fixed for the lifetime of the object)
         max_training_steps: total number of meta-training steps (for annealing merging_eps)
@@ -231,9 +231,6 @@ class MetaTrainState(flax.struct.PyTreeNode):
 
         updated_params_list = cls.make_pytree_list(params, meta_batch_size)
         test_loss_grads = cls.make_pytree_list(jax.tree_util.tree_map(jnp.zeros_like, params), meta_batch_size)
-
-        # merging_eps starts at 1.0
-        merging_eps = 1.0
 
         return cls(
             step=1,
@@ -282,13 +279,13 @@ class MetaTrainState(flax.struct.PyTreeNode):
         )
 
         # Use meta_opt for the meta-update step
-        updates, new_meta_opt_state = self.meta_opt.update(grads, self.meta_opt_state, self.params)
+        updates, new_inner_opt_state = self.inner_opt.update(grads, self.inner_opt_state, self.params)
         new_params = optax.apply_updates(self.params, updates)
 
         return self.replace(
             step=self.step + 1,
             params=new_params,
-            meta_opt_state=new_meta_opt_state,
+            inner_opt_state=new_inner_opt_state,
         ), info
 
     def add_task_adaptation_result(self, updated_params, test_loss_grads, final_opt_state, i):
@@ -298,44 +295,88 @@ class MetaTrainState(flax.struct.PyTreeNode):
 
         return self.replace(inner_opt_state=final_opt_state)
 
-    def inner_update(self, loss_fn, num_steps=1, test_loss_fn=None, is_fomaml=False, params=None):
+    def inner_update(self,
+        loss_fn,
+        test_loss_fn=None,
+        is_fomaml=False,
+        params=None,
+        reset_inner_opt=False,
+        test_loss_pre_update=False,
+        debug_print: Optional[str] = None,
+    ):
         """
-        Perform inner-loop adaptation for a task (N steps of optimizer), then add the resulting parameters to the list.
-        If test_loss_fn is provided, compute the gradient of test_loss_fn evaluated at updated_params,
-        using either FOMAML or Reptile/MAML style depending on is_fomaml.
-        In both cases, add the test_loss_grads to self.test_loss_grads.
-        Returns a new MetaTrainState with the updated lists.
+        Perform a single step of inner-loop optimization for meta-learning.
+
+        Args:
+            loss_fn (Callable): Loss function for training, takes parameters as input and returns (loss, info).
+            test_loss_fn (Callable, optional): Loss function for testing. Used to compute test-time gradients.
+            is_fomaml (bool, optional): If True, computes gradients for FOMAML by differentiating test_loss_fn w.r.t. updated params.
+                                         If False (MAML), differentiates test_loss_fn(updated_params) w.r.t. original params. Default: False.
+            params (PyTree, optional): Initial parameters to optimize. If None, uses self.params.
+            reset_inner_opt (bool, optional): If True, re-initializes the optimizer state. Default: False.
+
+        Returns:
+            updated_params (PyTree): Parameters after inner update.
+            test_grads (PyTree or None): Gradients of test_loss_fn w.r.t. parameters, or None if test_loss_fn not provided.
+            new_inner_opt_state: Optimizer state after update.
+            info (dict): Information dictionary from the loss function (may be from training or testing).
         """
 
-        # 1. Peform N steps of inner-loop optimization, train the model on the train_batch
-        opt_state = self.inner_opt_state
+        info = {}
+        # 1. Test loss pre-update
+        if test_loss_fn is not None:
+            if debug_print == "pre":
+                jax.debug.print("Computing test loss pre-update")
+            if is_fomaml:
+                # FOMAML: grad of test_loss_fn w.r.t. updated_params
+                test_grads, test_info_pre = jax.grad(test_loss_fn, has_aux=True)(params)
+                if debug_print == "pre":
+                    jax.debug.print('Test info: {}', info['actor/actor_loss'])
+            else:
+                assert NotImplementedError("MAML implementation has to be fixed.")
+                # MAML: grad of test_loss_fn(updated_params) w.r.t. original params
+                def test_loss_on_orig_params(orig_params):
+                    return test_loss_fn(updated_params)
+                test_grads, test_info_pre = jax.grad(test_loss_on_orig_params, has_aux=True)(params)
+
+            info.update({f"pre_test/{k}": v for k, v in test_info_pre.items()})
+
+
+        # 1. Peform 1 steps of inner-loop optimization, train the model on the train_batch
+        if reset_inner_opt:
+            opt_state = self.inner_opt.init(params)
+        else:
+            opt_state = self.inner_opt_state
+
         if params is None:
             params = self.params
 
-        def step_fn(carry, _):
-            params, opt_state = carry
-            grads, info = jax.grad(loss_fn, has_aux=True)(params)
-            updates, new_opt_state = self.inner_opt.update(grads, opt_state, params)
-            new_params = optax.apply_updates(params, updates)
-            return (new_params, new_opt_state), info
-
-        (updated_params, final_opt_state), info = jax.lax.scan(
-            step_fn, (params, opt_state), None, length=num_steps
-        )
+        grads, train_info = jax.grad(loss_fn, has_aux=True)(params)
+        info.update({f"train/{k}": v for k, v in train_info.items()})
+        updates, new_inner_opt_state = self.inner_opt.update(grads, opt_state, params)
+        updated_params = optax.apply_updates(params, updates)
 
         # 2. Compute test gradients using updated_params
         test_grads = None
         if test_loss_fn is not None:
+            if debug_print == "post":
+                jax.debug.print("Computing test loss post-update")
             if is_fomaml:
                 # FOMAML: grad of test_loss_fn w.r.t. updated_params
-                test_grads, info = jax.grad(test_loss_fn, has_aux=True)(updated_params)
+                test_grads, test_info_post = jax.grad(test_loss_fn, has_aux=True)(updated_params)
+
             else:
+                assert NotImplementedError("MAML implementation has to be fixed.")
                 # MAML: grad of test_loss_fn(updated_params) w.r.t. original params
                 def test_loss_on_orig_params(orig_params):
                     return test_loss_fn(updated_params)
-                test_grads, info = jax.grad(test_loss_on_orig_params, has_aux=True)(params)
+                test_grads, test_info_post = jax.grad(test_loss_on_orig_params, has_aux=True)(params)
 
-        return updated_params, test_grads, final_opt_state, info
+            info.update({f"test/{k}": v for k, v in test_info_post.items()})
+            if debug_print == "post":
+                jax.debug.print(f'Test info post-update: {info}')
+
+        return updated_params, test_grads, new_inner_opt_state, info
 
     def meta_update(self, use_model_merging=False, eps=None, **kwargs):
         """
@@ -362,7 +403,7 @@ class MetaTrainState(flax.struct.PyTreeNode):
                     merging_eps = self.merging_eps - (self.step - 1) / (self.max_training_steps - 1)
                     merging_eps = jnp.clip(merging_eps, 0.0, 1.0)
                 else:
-                    merging_eps = 1.0
+                    merging_eps = self.merging_eps
             else:
                 merging_eps = eps
 
@@ -453,7 +494,30 @@ def restore_agent(agent, restore_path, restore_epoch):
     with open(restore_path, 'rb') as f:
         load_dict = pickle.load(f)
 
-    agent = flax.serialization.from_state_dict(agent, load_dict['agent'])
+
+    # If agent has MetaTrainState, only restore specific fields using replace
+    if hasattr(agent, 'network') and agent.network is not None:
+        # Get the fields we want to restore from the checkpoint
+
+        if 'meta_train_state' in load_dict['agent']:
+            # Old implementation naming
+            network = load_dict['agent']['meta_train_state']
+        else:
+            # New implementation naming
+            network = load_dict['agent']['network']
+
+        # Only restore params, skip optimizer states to avoid serialization issues
+        agent = agent.replace(
+            network=agent.network.replace(
+                params=network.get('params', agent.network.params)
+                # Skip inner_opt_state and meta_opt_state to avoid serialization issues
+            )
+        )
+        # Setup updated_params_list and test_loss_grads
+        agent.network.init_updated_params_list(agent.network.params)
+    else:
+        # For non-meta agents, restore normally
+        agent = flax.serialization.from_state_dict(agent, load_dict['agent'])
 
     print(f'Restored from {restore_path}')
 

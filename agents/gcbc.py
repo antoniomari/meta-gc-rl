@@ -12,7 +12,6 @@ from agents.gcagent import GCAgent, MetaGCAgent
 from typing import cast
 
 
-
 class GCBCAgent(GCAgent):
     """Goal-conditioned behavioral cloning (GCBC) agent."""
     # NOTE: flax.struct.PyTreeNode is turned into a frozen dataclass like Flax struct
@@ -162,7 +161,7 @@ class MetaGCBCAgent(MetaGCAgent):
 
     def actor_loss(self, batch, grad_params, rng=None):
         """Compute the BC actor loss."""
-        dist =self.meta_train_state.select('actor')(batch['observations'], batch['actor_goals'], params=grad_params)
+        dist = self.network.select('actor')(batch['observations'], batch['actor_goals'], params=grad_params)
         log_prob = dist.log_prob(batch['actions'])
 
         actor_loss = -log_prob.mean()
@@ -207,11 +206,10 @@ class MetaGCBCAgent(MetaGCAgent):
         def loss_fn(grad_params):
             return self.total_loss(batch, grad_params, rng=rng)
 
-        new_meta_train_state, info = self.meta_train_state.apply_loss_fn(loss_fn=loss_fn)
+        new_meta_train_state, info = self.network.apply_loss_fn(loss_fn=loss_fn)
 
         # Return a new immutable agent with updated network and PRNG + metrics
-        return self.replace(meta_train_state=new_meta_train_state, rng=new_rng), info
-
+        return self.replace(network=new_meta_train_state, rng=new_rng), info
 
 
     @classmethod
@@ -271,7 +269,7 @@ class MetaGCBCAgent(MetaGCAgent):
 
         network_def = ModuleDict(networks)
         # Define two separate Adam optimizers: one for inner loop, one for meta-update
-        inner_opt = optax.adam(learning_rate=config['lr'])
+        inner_opt = optax.adam(learning_rate=config['inner_lr'])
         meta_opt = optax.adam(learning_rate=config['lr'])
         # init + dummy forward pass, returns PyTree?
         network_params = network_def.init(init_rng, **network_args)['params']
@@ -283,9 +281,10 @@ class MetaGCBCAgent(MetaGCAgent):
             meta_opt=meta_opt,
             meta_batch_size=config['meta_batch_size'],
             max_training_steps=train_steps, # TODO: adjust config next
+            merging_eps=config['merging_eps'],
         )
 
-        return cls(rng, meta_train_state=meta_train_state, config=flax.core.FrozenDict(**config))
+        return cls(rng, network=meta_train_state, config=flax.core.FrozenDict(**config))
 
 
 

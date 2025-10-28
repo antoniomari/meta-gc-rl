@@ -7,12 +7,12 @@ import jax.numpy as jnp
 import ml_collections
 import optax
 from utils.encoders import GCEncoder, encoder_modules
-from utils.flax_utils import ModuleDict, TrainState, nonpytree_field
+from utils.flax_utils import ModuleDict, MetaTrainState, nonpytree_field
 from utils.networks import GCActor, GCDiscreteActor, GCDiscreteCritic, GCValue
-from agents.gcagent import GCAgent
+from agents.gcagent import MetaGCAgent
 
 
-class GCIQLAgent(GCAgent):
+class GCIQLAgent(MetaGCAgent):
     """Goal-conditioned implicit Q-learning (GCIQL) agent.
 
     This implementation supports both AWR (actor_loss='awr') and DDPG+BC (actor_loss='ddpgbc') for the actor loss.
@@ -209,6 +209,7 @@ class GCIQLAgent(GCAgent):
         ex_observations,
         ex_actions,
         config,
+        train_steps,
     ):
         """Create a new agent.
 
@@ -284,9 +285,19 @@ class GCIQLAgent(GCAgent):
         network_args = {k: v[1] for k, v in network_info.items()}
 
         network_def = ModuleDict(networks)
-        network_tx = optax.adam(learning_rate=config['lr'])
+        # Define two separate Adam optimizers: one for inner loop, one for meta-update
+        inner_opt = optax.adam(learning_rate=config['inner_lr'])
+        meta_opt = optax.adam(learning_rate=config['lr'])
         network_params = network_def.init(init_rng, **network_args)['params']
-        network = TrainState.create(network_def, network_params, tx=network_tx)
+        network =  MetaTrainState.create(
+            network_def,
+            network_params,
+            inner_opt=inner_opt,
+            meta_opt=meta_opt,
+            meta_batch_size=config['meta_batch_size'],
+            max_training_steps=train_steps, # TODO: adjust config next
+            merging_eps=config['merging_eps'],
+        )
 
         params = network_params
         params['modules_target_critic'] = params['modules_critic']

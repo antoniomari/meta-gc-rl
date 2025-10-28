@@ -1,6 +1,6 @@
 import dataclasses
 from functools import partial
-from typing import Any
+from typing import Any, Optional
 
 import jax
 import jax.numpy as jnp
@@ -94,8 +94,8 @@ def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to
         obs: Current observation (1D array).
         goal: Goal observation (1D array).
         finetune_kwargs: Additional fine-tuning parameters, e.g., proprio_dim, num_cubes, etc.
-        state_to_goal_dist: Precomputed distance from current state to all states in the dataset.
-        start_to_state_dist: Precomputed distance from current state to all states in the dataset.
+        state_to_goal_dist: Precomputed distance from goal state to all states in the dataset.
+        start_to_state_dist: Precomputed distance from start state to all states in the dataset.
     """
 
     _obs = dataset['observations']
@@ -212,7 +212,6 @@ def filter_from_state_goal(dataset, obs, goal, quantile, slack, sim_threshold, f
     if cube_env:
         proprio_dim = finetune_kwargs['proprio_dim']
         num_cubes = finetune_kwargs['num_cubes']
-    visual_env = finetune_kwargs.get('visual_env', False) # if true we use visual env logic for selecting subgoals
 
     _obs = dataset['observations']
     ep_id = dataset['terminals'].cumsum() // 2
@@ -570,11 +569,14 @@ class GCDataset:
 
     # NOTE: batch size here is useless
     def prepare_active_sample(self, agent, obs, goal, finetune_kwargs, batch_size=2048, exp_name = None,
-                              log_filter=True):
+                              log_filter=True, mc_quantile: Optional[float] = None):
+        # NOTE: mc_quantile is the quantile of the Monte-Carlo returns to use for filtering. If None, it is set to the value in finetune_kwargs.
 
         _obs = self.dataset['observations']
         _filter = jnp.ones_like(self.dataset['terminals'])
-        mc_quantile = finetune_kwargs['mc_quantile']
+        if mc_quantile is None:
+            mc_quantile = finetune_kwargs['mc_quantile']
+
         mc_slack = finetune_kwargs['mc_slack']
         mc_similarity_threshold = finetune_kwargs['mc_similarity_threshold']
         max_len = np.inf
@@ -597,10 +599,14 @@ class GCDataset:
         # - trajectory passes close to current state (in terms of reward)
         # - trajectory passes close to current goal (in terms of reward)
         elif finetune_kwargs.get('filter_by_recursive_mdp', False):
+            import time
+            value_timer_start = time.time()
+
             _values = []
             _start_values = []
-            batch_size=10000
+            batch_size=400_000
             for i in range((len(_obs) // batch_size) + 1):
+                # _sli and _ce are the start and end indices of the current batch
                 _sli, _ce = i*batch_size, min((i+1)*batch_size, len(_obs))
                 if finetune_kwargs.get('saw', False):
                     v1, v2 = agent.network.select('value')(_obs[_sli:_ce], goal.reshape(1, -1).repeat(_ce - _sli, 0))
@@ -612,12 +618,22 @@ class GCDataset:
                     _start_values.append(v)
                     del v1, v2, v
                 else:
+                    # Compute value of the each state with respect to the goal
                     _values.append(agent.network.select('value')(_obs[_sli:_ce], goal.reshape(1, -1).repeat(_ce - _sli, 0)))
+                    # Compute value of the each state with respect to the start state
                     _start_values.append(agent.network.select('value')(_obs[_sli:_ce], obs.reshape(1, -1).repeat(_ce - _sli, 0)))
+
             _values = jnp.concatenate(_values, 0)
+
+            # log(1 + _values / 100 ) / log(0.99)
             state_to_goal_dist = (jnp.log((_values/(1/(1 - 0.99)) + 1)) / jnp.log(0.99))
             _start_values = jnp.concatenate(_start_values, 0)
+            # log(1 + _start_values / 100 ) / log(0.99)
             start_to_state_dist = (jnp.log((_start_values/(1/(1 - 0.99)) + 1)) / jnp.log(0.99))
+
+            value_timer_end = time.time()
+            # TODO: restore if needed for debugging
+            # print(f"[Timing] Value computation took {value_timer_end - value_timer_start:.4f} seconds")
 
             #td_filter = filter_by_recursive_mdp(self.dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist, start_to_state_dist)
             td_filter, max_len = filter_by_recursive_mdp(self.dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist, start_to_state_dist,

@@ -46,11 +46,13 @@ class FinetuneConfig:
     num_steps: int = 0
     num_steps_list: List[int] = field(default_factory=lambda: [0, 5, 10, 20, 50])
     lr: float = 3e-5
+    inner_lr: Optional[float] = None
     actor_loss: str = "ddpgbc"
     alpha: Optional[float] = None
     batch_size: int = 1024
     fix_actor_goal: float = 0.0
     mc_quantile: float = 0.2
+    mc_quantile_train: Optional[float] = None
     mc_slack: int = 5
     sorb_len: int = 10
     filter_by_mc: bool = False
