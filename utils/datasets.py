@@ -533,7 +533,7 @@ class GCDataset:
 
         return goal_idxs
 
-    def active_sample(self, batch_size: int, _filter, goal, ratio, fix_actor_goal, finetune_kwargs):
+    def active_sample(self, batch_size: int, _filter, goal, ratio, fix_actor_goal, finetune_kwargs, return_indices=False):
         """
         This function samples a batch of data for fine-tuning, combining both uniform and actively selected samples.
         A portion of the batch is sampled uniformly, while the rest is sampled from transitions that satisfy a given filter.
@@ -549,7 +549,10 @@ class GCDataset:
 
         Returns:
             dict: A batch dictionary with concatenated uniform and active samples.
+            np.ndarray: Indices of the selected samples.
         """
+        if return_indices:
+            assert ratio == 1.0, "To get indices, ratio of active samples must be 1.0"
         finetune_bs = int(batch_size * ratio)
         # First, sample a batch normally
         uniform_batch = self.sample(batch_size - finetune_bs)
@@ -558,14 +561,17 @@ class GCDataset:
         active_batch = self.sample(finetune_bs, idxs)
 
         # We set the actor goals to the same goal for fix_actor_goal percentage of transitions in the active batch.
-        idxs = np.random.uniform(size=(finetune_bs,)) < fix_actor_goal
+        idxs_fix_actor_goal = np.random.uniform(size=(finetune_bs,)) < fix_actor_goal
         if finetune_kwargs.get('saw', False):
-            active_batch['high_actor_goals'][idxs] = goal
-            #active_batch['low_actor_goals'][idxs] = goal
+            active_batch['high_actor_goals'][idxs_fix_actor_goal] = goal
+            #active_batch['low_actor_goals'][idxs_fix_actor_goal] = goal
         else:
-            active_batch['actor_goals'][idxs] = goal
+            active_batch['actor_goals'][idxs_fix_actor_goal] = goal
 
-        return {k: np.concatenate([uniform_batch[k], active_batch[k]]) for k in uniform_batch}
+        if return_indices:
+            return {k: np.concatenate([uniform_batch[k], active_batch[k]]) for k in uniform_batch}, idxs
+        else:
+            return {k: np.concatenate([uniform_batch[k], active_batch[k]]) for k in uniform_batch}
 
     # NOTE: batch size here is useless
     def prepare_active_sample(self, agent, obs, goal, finetune_kwargs, batch_size=2048, exp_name = None,

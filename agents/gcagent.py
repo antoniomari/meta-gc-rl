@@ -64,6 +64,8 @@ class MetaGCAgent(flax.struct.PyTreeNode):
         is_fomaml: bool = False,
         reset_inner_opt: bool = False,
         debug_print: Optional[str] = None,
+        average_test_gradients: bool = False,
+        inner_step: Optional[int] = None,
     ) -> tuple["MetaGCAgent", dict]:
         """
         Perform an inner-loop meta-update for a single task.
@@ -81,7 +83,7 @@ class MetaGCAgent(flax.struct.PyTreeNode):
         """
         # Call get_inner_update_result and add the result to meta_train_state
         updated_params, test_grads, final_opt_state, info = self.get_inner_update_result(train_batch, test_batch, is_fomaml, reset_inner_opt, params_idx=i, debug_print=debug_print)
-        new_network = self.network.add_task_adaptation_result(updated_params, test_grads, final_opt_state, i)
+        new_network = self.network.add_task_adaptation_result(updated_params, test_grads, final_opt_state, i, average_test_gradients, inner_step)
         return self.replace(network=new_network), info
 
     @functools.partial(jax.jit, static_argnames=("is_fomaml", "reset_inner_opt", "params_idx", "debug_print"))

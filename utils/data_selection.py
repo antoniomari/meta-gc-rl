@@ -1,40 +1,9 @@
-import sys
-import yaml
-import os
-import random
-import time
-import psutil
-import gc
-import argparse
-from collections import defaultdict, OrderedDict
 import gymnasium as gym
-import wandb
-import jax
-from dataclasses import asdict
 import numpy as np
-import tqdm
-from agents import agents
-from ml_collections import FrozenConfigDict
-from utils.datasets import Dataset, GCDataset, HGCDataset
-from utils.env_utils import make_env_and_datasets
-from utils.evaluation import evaluate, _cfg_get
-from utils.flax_utils import restore_agent, save_agent
-from utils.log_utils import CsvLogger, get_exp_name, get_wandb_video, setup_wandb
-from utils.config import GCTTTConfig, load_config
-from typing import List, Tuple, Optional
-from agents.gcagent import GCAgent, MetaGCAgent
-import matplotlib.pyplot as plt
-import io
-
-
-def _to_np(x):
-    # Convert to numpy array for distance computation
-    if isinstance(x, np.ndarray):
-        return x
-    elif hasattr(x, "cpu"):
-        return np.asarray(x.cpu())
-    else:
-        return np.asarray(x)
+from utils.datasets import GCDataset
+from utils.evaluation import _cfg_get
+from typing import List, Tuple, Optional, Any, TypedDict
+from agents.gcagent import GCAgent
 
 class DataSelectionCache:
     def __init__(self, cache_max_size=100):
@@ -97,57 +66,70 @@ def get_batch_filters(train_dataset: GCDataset, agent: GCAgent, start_states, go
     ]
 
 
-def fetch_meta_batches(
-    train_dataset: GCDataset,
-    goals,
-    finetune_config,
-    filters_and_max_lens,
-    meta_batch_size: int = None,
-):
+def fetch_meta_batch(
+    train_dataset: 'GCDataset',
+    goal: Any,
+    finetune_config: dict,
+    filter_and_max_len: tuple,
+    meta_batch_size: Optional[int] = None,
+    exclude: Optional[List[int]] = None,
+    verbose: bool = False,
+) -> Tuple[dict, np.ndarray]:
     """
-    Build meta batches from a dataset for meta-learning fine-tuning.
+    Build a meta batch from a dataset for meta-learning fine-tuning,
+    for a single (goal, filter_and_max_len) pair.
 
-    For each pair of (filter, goal) in filters_and_max_lens and goals, construct a batch of data by selecting samples
-    that satisfy the filter and are conditioned on the given goal. Only includes batches if the filter is not None
-    and selects at least one sample.
+    Optionally, you can provide an 'exclude' argument to mask out indices from the filter.
+    'exclude' should be an iterable of indices to exclude from the batch.
+
+    Returns a list of MetaBatchDict(s), each containing:
+      - 'batch': Dict of arrays for the active sample.
+      - 'batch_idx': Indices (within original dataset) of selected samples.
 
     Args:
         train_dataset: The dataset from which to sample.
-        goals: A list or array of goal states, each corresponding to a meta-batch task.
-        finetune_config: Dictionary/config object holding fine-tuning hyperparameters (must have "batch_size", "ratio", etc).
-        filters_and_max_lens: List of (filter, max_len) tuples, strongly aligned with goals.
-        meta_batch_size: Optional override for batch size per meta task.
+        goal: Goal state for the batch/task.
+        finetune_config: Dictionary/config holding fine-tuning hyperparameters ("batch_size", "ratio", etc).
+        filter_and_max_len: Tuple of (filter, max_len).
+        meta_batch_size: Optional override for batch size.
+        exclude: Optional iterable of indices to mask out (set False in filter).
 
     Returns:
-        all_batches: List of batches (dicts of arrays), one for each task/filter with non-empty samples.
+        all_batches: List of MetaBatchDict(s), for the given input (empty list if filter is invalid or empty).
     """
 
-    # Now, for each batch element, build train/test batches
-    # Vectorized: build all batches at once if possible, else use list comprehension
     if meta_batch_size is not None:
         batch_size = meta_batch_size
     else:
         batch_size = int(finetune_config.get("batch_size"))
 
-    # Prepare all batch args
-    all_batches = []
-    for i in range(len(filters_and_max_lens)):
-        filter, _ = filters_and_max_lens[i]
-        goal = goals[i]
+    filt, _ = filter_and_max_len
 
-        # Add batch if filter contains samples
-        if filter is not None and filter.sum() > 0:
-            batch = train_dataset.active_sample(
+    if filt is not None and filt.sum() > 0:
+        # Exclude indices if provided
+        if exclude is not None:
+            filt_used = np.copy(filt)
+            filt_used[exclude] = 0
+        else:
+            filt_used = filt
+
+        if verbose:
+            print(f"Fetching meta batch: filter has {filt_used.sum()} samples")
+
+        # Only add batch if there are remaining samples after exclusion
+        if filt_used is not None and filt_used.sum() > 0:
+            batch, idxs = train_dataset.active_sample(
                 batch_size,
-                filter,
+                filt_used,
                 goal,
                 _cfg_get(finetune_config, "ratio"),
                 _cfg_get(finetune_config, "fix_actor_goal"),
-                finetune_kwargs=finetune_config
+                finetune_kwargs=finetune_config,
+                return_indices=True,
             )
-            all_batches.append(batch)
+            return batch, idxs
 
-    return all_batches
+    return (None, None)
 
 
 def fetch_random_batch(

@@ -31,7 +31,7 @@ from utils.env_utils import make_env_and_datasets
 from utils.evaluation import evaluate, _cfg_get
 from utils.flax_utils import restore_agent, save_agent
 from utils.log_utils import CsvLogger, get_exp_name, get_wandb_video, setup_wandb
-from utils.data_selection import get_batch_filters, fetch_meta_batches
+from utils.data_selection import get_batch_filters, fetch_meta_batch
 from utils.config import GCTTTConfig, load_config
 from agents.gcagent import GCAgent, MetaGCAgent
 import matplotlib.pyplot as plt
@@ -159,6 +159,8 @@ Examples:
                         help='Override agent.merging_eps value (float)')
     parser.add_argument('--finetune.inner_lr', type=float, dest='finetune_inner_lr',
                         help='Override finetune.inner_lr value (float) - used for inner optimizer')
+    parser.add_argument('--average_test_gradients', action='store_true', dest='average_test_gradients',
+                        help='Override average_test_gradients to True (average test gradients across tasks)')
     parser.add_argument('--verbose', action='store_true', dest='verbose',
                         help='Enable verbose output (prints timing, memory, and debug information)')
 
@@ -661,8 +663,11 @@ def log_test_loss(test_info, cfg: GCTTTConfig, save_path: str, inner_step: int, 
     # I want to save these columns: meta_step, inner_step, test_loss
     # Create save_path directory if it doesn't exist
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    with open(save_path, 'a') as f:
+    file_exists = os.path.isfile(save_path)
+    with open(save_path, 'a', newline='') as f:
         writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(['meta_step', 'inner_step', 'test_loss'])
         writer.writerow([meta_step, inner_step, test_info])
 
 
@@ -907,22 +912,37 @@ def main(cfg: GCTTTConfig, verbose: bool = False):
 
             for num_task in range(META_BATCH_SIZE):
 
+                fetched = False
+                while not fetched:
+                    start_states, goals = sample_start_goal_pairs(train_dataset, env, 1, cfg.train_on_test_goal, is_stitch_dataset="stitch" in cfg.env_name)
+                    batch_filters_and_max_lens = get_batch_filters(train_dataset, agent, start_states, goals, cfg.finetune, mc_quantile=cfg.finetune.get("mc_quantile_train", None))
+                    task_filter = batch_filters_and_max_lens[0][0]
+                    if task_filter.sum() > 0:
+                        fetched = True
+
                 # Sample test batch for the task
-                test_batch = fetch_meta_batches(
+                test_batch, test_batch_idx = fetch_meta_batch(
                     train_dataset,
-                    [goals[num_task]],
+                    goals[0],
                     cfg.finetune,
-                    [batch_filters_and_max_lens[num_task]]
-                )[0]
+                    batch_filters_and_max_lens[0],
+                    meta_batch_size=int(task_filter.sum() * cfg.test_batch_fraction),
+                    verbose=True
+                )
 
                 for inner_step in range(config_agent.get("inner_loop_steps", 1)):
 
-                    train_batch = fetch_meta_batches(
+                    train_batch, _ = fetch_meta_batch(
                         train_dataset,
-                        [goals[num_task]],
+                        goals[num_task],
                         cfg.finetune,
-                        [batch_filters_and_max_lens[num_task]]
-                    )[0]
+                        batch_filters_and_max_lens[num_task],
+                        exclude=test_batch_idx,
+                        verbose=inner_step == 0
+                    )
+
+                    if train_batch is None:
+                        break
 
 
                     debug_inner_steps = [10-1, 20-1, 50-1, 100-1, 200-1]
@@ -954,14 +974,16 @@ def main(cfg: GCTTTConfig, verbose: bool = False):
                         train_batch,
                         test_batch,
                         is_fomaml=is_fomaml,
-                        reset_inner_opt=inner_step == 0
+                        reset_inner_opt=inner_step == 0,
+                        average_test_gradients=cfg.average_test_gradients,
+                        inner_step=inner_step
                     )
 
                     # Log test losses
                     if META_LEARNING_ALGORITHM in ["fomaml", "maml"]:
                         save_path = os.path.join(
                             cfg.working_dir,
-                            f"{META_LEARNING_ALGORITHM}-{args.inner_loop_steps}-{args.meta_batch_size}",
+                            f"{'avg-test-grad' if cfg.average_test_gradients else ''}-{'TEST-GOALS'if cfg.train_on_test_goal else 'ALL-GOALS'}-{META_LEARNING_ALGORITHM}-{args.inner_loop_steps}-{args.meta_batch_size}",
                             f"irl-{cfg.finetune.inner_lr}-lr-{cfg.finetune.lr}-test_loss.csv"
                         )
                         if inner_step == 0:
@@ -977,7 +999,7 @@ def main(cfg: GCTTTConfig, verbose: bool = False):
                                 batch_info["test/actor/actor_loss"],
                                 cfg,
                                 save_path,
-                                inner_step=inner_step,
+                                inner_step=inner_step+1,
                                 meta_step=i
                             )
 
@@ -1143,6 +1165,9 @@ if __name__ == "__main__":
         override_config_value(cfg, 'finetune.inner_lr', str(args.finetune_inner_lr))
     # Use the finetune.inner_lr value (maybe after overwriting it)
     cfg.agent['inner_lr'] = cfg.finetune.inner_lr
+
+    if args.average_test_gradients:
+        cfg.average_test_gradients = True
 
     print(f"Number of steps list: {cfg.finetune.num_steps_list}")
 

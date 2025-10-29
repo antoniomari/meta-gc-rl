@@ -288,10 +288,22 @@ class MetaTrainState(flax.struct.PyTreeNode):
             inner_opt_state=new_inner_opt_state,
         ), info
 
-    def add_task_adaptation_result(self, updated_params, test_loss_grads, final_opt_state, i):
+    def add_task_adaptation_result(self, updated_params, test_loss_grads, final_opt_state, i, average_test_gradients=False, inner_step=None):
         self.updated_params_list[i] = updated_params
         if test_loss_grads is not None:
-            self.test_loss_grads[i] = test_loss_grads
+            if average_test_gradients and inner_step is not None and inner_step >= 0:
+                if self.test_loss_grads[i] is not None:
+                    # Compute running average: previous average was over inner_step, now include the new sample
+                    self.test_loss_grads[i] = jax.tree_util.tree_map(
+                        lambda prev_avg, new: (prev_avg * inner_step + new) / (inner_step + 1),
+                        self.test_loss_grads[i],
+                        test_loss_grads
+                    )
+                else:
+                    # First step: simply assign the test_loss_grads
+                    self.test_loss_grads[i] = test_loss_grads
+            else:
+                self.test_loss_grads[i] = test_loss_grads
 
         return self.replace(inner_opt_state=final_opt_state)
 

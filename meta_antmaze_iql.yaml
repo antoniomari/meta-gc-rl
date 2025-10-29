@@ -44,6 +44,8 @@ log_interval: 10
 eval_interval: 10000
 save_interval: 100000
 eval_start: 000000
+test_batch_fraction: 0.2  # During meta-pretraining, use 20% of the filtered data for test_batch
+average_test_gradients: False
 
 eval_tasks: null
 eval_episodes: 50

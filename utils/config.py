@@ -100,12 +100,14 @@ class GCTTTConfig:
     meta_algorithm: Optional[Literal["maml", "fomaml", "reptile"]] = None  # Options: "maml", "fomaml", "reptile"
     train_on_test_goal: bool = False  # Whether to use test goal for training batch fetching
     use_random_batch: bool = False  # Whether to use random batch sampling instead of goal-conditioned
+    average_test_gradients: bool = False  # Whether to average test gradients across tasks
 
     train_steps: int = 1_000_000
     log_interval: int = 5000
     eval_interval: int = 100_000
     save_interval: int = 100_000
     eval_start: int = 800_000
+    test_batch_fraction: float = 0.2
 
     eval_tasks: Optional[List[int]] = None
     eval_episodes: int = 50
@@ -130,11 +132,13 @@ class GCTTTConfig:
             meta_algorithm=cast(Literal["maml", "fomaml", "reptile"], data.get("meta_algorithm", cls.meta_algorithm)),
             train_on_test_goal=bool(data.get("train_on_test_goal", cls.train_on_test_goal)),
             use_random_batch=bool(data.get("use_random_batch", cls.use_random_batch)),
+            average_test_gradients=bool(data.get("average_test_gradients", cls.average_test_gradients)),
             train_steps=int(data.get("train_steps", cls.train_steps)),
             log_interval=int(data.get("log_interval", cls.log_interval)),
             eval_interval=int(data.get("eval_interval", cls.eval_interval)),
             save_interval=int(data.get("save_interval", cls.save_interval)),
             eval_start=int(data.get("eval_start", cls.eval_start)),
+            test_batch_fraction=float(data.get("test_batch_fraction", cls.test_batch_fraction)),
             eval_tasks=data.get("eval_tasks", None),
             eval_episodes=int(data.get("eval_episodes", cls.eval_episodes)),
             eval_temperature=float(data.get("eval_temperature", cls.eval_temperature)),
