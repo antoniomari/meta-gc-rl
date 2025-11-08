@@ -2,6 +2,7 @@ import dataclasses
 from functools import partial
 from typing import Any, Optional
 
+import time
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -434,6 +435,8 @@ class GCDataset:
     dataset: Dataset
     config: Any
     preprocess_frame_stack: bool = True
+    values = None
+    start_values = None
 
     def __post_init__(self):
         self.size = self.dataset.size
@@ -605,11 +608,10 @@ class GCDataset:
         # - trajectory passes close to current state (in terms of reward)
         # - trajectory passes close to current goal (in terms of reward)
         elif finetune_kwargs.get('filter_by_recursive_mdp', False):
-            import time
             value_timer_start = time.time()
 
-            _values = []
-            _start_values = []
+            self.values = []
+            self.start_values = []
             batch_size=400_000
             for i in range((len(_obs) // batch_size) + 1):
                 # _sli and _ce are the start and end indices of the current batch
@@ -617,25 +619,25 @@ class GCDataset:
                 if finetune_kwargs.get('saw', False):
                     v1, v2 = agent.network.select('value')(_obs[_sli:_ce], goal.reshape(1, -1).repeat(_ce - _sli, 0))
                     v = (v1 + v2) / 2
-                    _values.append(v)
+                    self.values.append(v)
                     del v1, v2, v
                     v1, v2 = agent.network.select('value')(_obs[_sli:_ce], obs.reshape(1, -1).repeat(_ce - _sli, 0))
                     v = (v1 + v2) / 2
-                    _start_values.append(v)
+                    self.start_values.append(v)
                     del v1, v2, v
                 else:
                     # Compute value of the each state with respect to the goal
-                    _values.append(agent.network.select('value')(_obs[_sli:_ce], goal.reshape(1, -1).repeat(_ce - _sli, 0)))
+                    self.values.append(agent.network.select('value')(_obs[_sli:_ce], goal.reshape(1, -1).repeat(_ce - _sli, 0), params=agent.network.params))
                     # Compute value of the each state with respect to the start state
-                    _start_values.append(agent.network.select('value')(_obs[_sli:_ce], obs.reshape(1, -1).repeat(_ce - _sli, 0)))
+                    self.start_values.append(agent.network.select('value')(_obs[_sli:_ce], obs.reshape(1, -1).repeat(_ce - _sli, 0), params=agent.network.params))
 
-            _values = jnp.concatenate(_values, 0)
+            self.values = jnp.concatenate(self.values, 0)
+            self.start_values = jnp.concatenate(self.start_values, 0)
 
             # log(1 + _values / 100 ) / log(0.99)
-            state_to_goal_dist = (jnp.log((_values/(1/(1 - 0.99)) + 1)) / jnp.log(0.99))
-            _start_values = jnp.concatenate(_start_values, 0)
+            state_to_goal_dist = (jnp.log((self.values/(1/(1 - 0.99)) + 1)) / jnp.log(0.99))
             # log(1 + _start_values / 100 ) / log(0.99)
-            start_to_state_dist = (jnp.log((_start_values/(1/(1 - 0.99)) + 1)) / jnp.log(0.99))
+            start_to_state_dist = (jnp.log((self.start_values/(1/(1 - 0.99)) + 1)) / jnp.log(0.99))
 
             value_timer_end = time.time()
             # TODO: restore if needed for debugging
@@ -643,7 +645,7 @@ class GCDataset:
 
             #td_filter = filter_by_recursive_mdp(self.dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist, start_to_state_dist)
             td_filter, max_len = filter_by_recursive_mdp(self.dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist, start_to_state_dist,
-                                                         _start_values, _values)
+                                                         self.start_values, self.values)
             _filter = _filter * td_filter
 
 

@@ -189,8 +189,8 @@ class MetaTrainState(flax.struct.PyTreeNode):
     """
 
     step: int
-    apply_fn: Any = nonpytree_field()
-    model_def: Any = nonpytree_field()
+    apply_fn: Any = nonpytree_field() # apply_fn is the function that applies the model to the input
+    model_def: Any = nonpytree_field() # model_def is the model definition
     params: Any
     inner_opt: Any = nonpytree_field()
     inner_opt_state: Any
@@ -351,6 +351,7 @@ class MetaTrainState(flax.struct.PyTreeNode):
                     return test_loss_fn(updated_params)
                 test_grads, test_info_pre = jax.grad(test_loss_on_orig_params, has_aux=True)(params)
 
+            # TODO: add grad norm
             info.update({f"pre_test/{k}": v for k, v in test_info_pre.items()})
 
 
@@ -360,8 +361,7 @@ class MetaTrainState(flax.struct.PyTreeNode):
         else:
             opt_state = self.inner_opt_state
 
-        if params is None:
-            params = self.params
+        assert params is not None, "params must be provided"
 
         grads, train_info = jax.grad(loss_fn, has_aux=True)(params)
         info.update({f"train/{k}": v for k, v in train_info.items()})
@@ -456,8 +456,7 @@ class MetaTrainState(flax.struct.PyTreeNode):
             )
 
     def __call__(self, *args, params=None, method=None, **kwargs):
-        if params is None:
-            params = self.params
+        assert params is not None, "params must be provided"
         variables = {'params': params}
         if method is not None:
             method_name = getattr(self.model_def, method)
@@ -526,7 +525,13 @@ def restore_agent(agent, restore_path, restore_epoch):
             )
         )
         # Setup updated_params_list and test_loss_grads
-        agent.network.init_updated_params_list(agent.network.params)
+        updated_params_list, test_loss_grads = agent.network.init_updated_params_list(agent.network.params)
+        agent = agent.replace(
+            network=agent.network.replace(
+                updated_params_list=updated_params_list,
+                test_loss_grads=test_loss_grads,
+            )
+        )
     else:
         # For non-meta agents, restore normally
         agent = flax.serialization.from_state_dict(agent, load_dict['agent'])

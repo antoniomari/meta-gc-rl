@@ -1,5 +1,5 @@
 import copy
-from typing import Any
+from typing import Any, Optional
 
 import flax
 import jax
@@ -10,6 +10,7 @@ from utils.encoders import GCEncoder, encoder_modules
 from utils.flax_utils import ModuleDict, MetaTrainState, nonpytree_field
 from utils.networks import GCActor, GCDiscreteActor, GCDiscreteCritic, GCValue
 from agents.gcagent import MetaGCAgent
+import functools
 
 
 class GCIQLAgent(MetaGCAgent):
@@ -19,7 +20,7 @@ class GCIQLAgent(MetaGCAgent):
     """
 
     rng: Any
-    network: Any
+    network:  MetaTrainState
     config: Any = nonpytree_field()
 
     @staticmethod
@@ -30,7 +31,9 @@ class GCIQLAgent(MetaGCAgent):
 
     def value_loss(self, batch, grad_params):
         """Compute the IQL value loss."""
-        q1, q2 = self.network.select('target_critic')(batch['observations'], batch['value_goals'], batch['actions'])
+
+        # q1, q2 = self.network.select('target_critic')(batch['observations'], batch['value_goals'], batch['actions'])
+        q1, q2 = self.network.select('target_critic')(batch['observations'], batch['value_goals'], batch['actions'], params=grad_params)
         q = jnp.minimum(q1, q2)
         v = self.network.select('value')(batch['observations'], batch['value_goals'], params=grad_params)
         value_loss = self.expectile_loss(q - v, q - v, self.config['expectile']).mean()
@@ -44,7 +47,8 @@ class GCIQLAgent(MetaGCAgent):
 
     def critic_loss(self, batch, grad_params):
         """Compute the IQL critic loss."""
-        next_v = self.network.select('value')(batch['next_observations'], batch['value_goals'])
+        # next_v = self.network.select('value')(batch['next_observations'], batch['value_goals'])
+        next_v = self.network.select('value')(batch['next_observations'], batch['value_goals'], params=grad_params)
         q = batch['rewards'] + self.config['discount'] * batch['masks'] * next_v
 
         q1, q2 = self.network.select('critic')(
@@ -63,8 +67,10 @@ class GCIQLAgent(MetaGCAgent):
         """Compute the actor loss (AWR or DDPG+BC)."""
         if self.config['actor_loss'] == 'awr':
             # AWR loss.
-            v = self.network.select('value')(batch['observations'], batch['actor_goals'])
-            q1, q2 = self.network.select('critic')(batch['observations'], batch['actor_goals'], batch['actions'])
+            # v = self.network.select('value')(batch['observations'], batch['actor_goals'])
+            v = self.network.select('value')(batch['observations'], batch['actor_goals'], params=grad_params)
+            # q1, q2 = self.network.select('critic')(batch['observations'], batch['actor_goals'], batch['actions'])
+            q1, q2 = self.network.select('critic')(batch['observations'], batch['actor_goals'], batch['actions'], params=grad_params)
             q = jnp.minimum(q1, q2)
             adv = q - v
 
@@ -99,10 +105,15 @@ class GCIQLAgent(MetaGCAgent):
                 q_actions = jnp.clip(dist.mode(), -1, 1)
             else:
                 q_actions = jnp.clip(dist.sample(seed=rng), -1, 1)
-            q1, q2 = self.network.select('critic')(batch['observations'], batch['actor_goals'], q_actions)
+
+            # q1, q2 = self.network.select('critic')(batch['observations'], batch['actor_goals'], q_actions)
+            q1, q2 = self.network.select('critic')(batch['observations'], batch['actor_goals'], q_actions, params=grad_params)
             q = jnp.minimum(q1, q2)
 
             # Normalize Q values by the absolute mean to make the loss scale invariant.
+            # jax.lax.stop_gradient prevents gradients from flowing through its argument during backprop.
+            # Here, it normalizes q.mean() by the absolute mean detached from the computation graph, so
+            # the denominator does not affect gradients.
             q_loss = -q.mean() / jax.lax.stop_gradient(jnp.abs(q).mean() + 1e-6)
             log_prob = dist.log_prob(batch['actions'])
 
@@ -165,14 +176,24 @@ class GCIQLAgent(MetaGCAgent):
         loss = value_loss + critic_loss + actor_loss
         return loss, info
 
-    def target_update(self, network, module_name):
-        """Update the target network."""
+    def target_update(self,
+        initial_params,
+        updated_params,
+        module_name: str = "critic"
+    ) -> None:
+        """Updates the target network, inplace.
+
+        Args:
+            initial_params: The initial parameters of the network.
+            updated_params: The updated parameters of the network.
+            module_name: The name of the module to update the target network for.
+        """
         new_target_params = jax.tree_util.tree_map(
             lambda p, tp: p * self.config['tau'] + tp * (1 - self.config['tau']),
-            self.network.params[f'modules_{module_name}'],
-            self.network.params[f'modules_target_{module_name}'],
+            initial_params[f'modules_{module_name}'],
+            initial_params[f'modules_target_{module_name}'],
         )
-        network.params[f'modules_target_{module_name}'] = new_target_params
+        updated_params[f'modules_target_{module_name}'] = new_target_params
 
     @jax.jit
     def update(self, batch, finetuning=False):
@@ -183,24 +204,35 @@ class GCIQLAgent(MetaGCAgent):
             return self.total_loss(batch, grad_params, rng=rng)
 
         new_network, info = self.network.apply_loss_fn(loss_fn=loss_fn)
-        self.target_update(new_network, 'critic')
+        self.target_update(self.network.params, new_network.params, 'critic')
 
         return self.replace(network=new_network, rng=new_rng), info
 
-    @jax.jit
-    def sample_actions(
+    @functools.partial(jax.jit, static_argnames=("is_fomaml", "reset_inner_opt", "params_idx", "debug_print"))
+    def get_inner_update_result(
         self,
-        observations,
-        goals=None,
-        seed=None,
-        temperature=1.0,
+        train_batch,
+        test_batch: Optional[dict] = None,
+        is_fomaml: bool = True,
+        reset_inner_opt: bool = False,
+        params_idx: int = 0,
+        debug_print: Optional[str] = None,
     ):
-        """Sample actions from the actor."""
-        dist = self.network.select('actor')(observations, goals, temperature=temperature)
-        actions = dist.sample(seed=seed)
-        if not self.config['discrete']:
-            actions = jnp.clip(actions, -1, 1)
-        return actions
+        # This is an override, call the parent class's get_inner_update_result
+        # The class should be exactly MetaGCAgent, so we can call the parent class's get_inner_update_result
+        initial_params = self.network.updated_params_list[params_idx]
+        updated_params, test_grads, final_opt_state, info = super().get_inner_update_result(train_batch, test_batch, is_fomaml, reset_inner_opt, params_idx, debug_print)
+        # Perform target update here
+        # TODO: adjust target update here (got bad results -> probably use it in meta-update)
+        self.target_update(initial_params, updated_params, 'critic')
+        return updated_params, test_grads, final_opt_state, info
+
+    @functools.partial(jax.jit, static_argnames=("use_model_merging",))
+    def meta_update(self, use_model_merging=False):
+        new_network = self.network.meta_update(use_model_merging)
+        # USE TARGET UPDATE HERE instead of in inner-update
+        self.target_update(self.network.params, new_network.params, 'critic')
+        return self.replace(network=new_network)
 
     @classmethod
     def create(
@@ -286,8 +318,19 @@ class GCIQLAgent(MetaGCAgent):
 
         network_def = ModuleDict(networks)
         # Define two separate Adam optimizers: one for inner loop, one for meta-update
-        inner_opt = optax.adam(learning_rate=config['inner_lr'])
-        meta_opt = optax.adam(learning_rate=config['lr'])
+        if "max_grad_norm" in config and config['max_grad_norm'] is not None:
+            print(f"Using max grad norm: {config['max_grad_norm']}")
+            inner_opt = optax.chain(
+                optax.clip_by_global_norm(config['max_grad_norm']),
+                optax.adam(learning_rate=config['inner_lr']),
+            )
+            meta_opt = optax.chain(
+                optax.clip_by_global_norm(config['max_grad_norm']),
+                optax.adam(learning_rate=config['lr']),
+            )
+        else:
+            inner_opt = optax.adam(learning_rate=config['inner_lr'])
+            meta_opt = optax.adam(learning_rate=config['lr'])
         network_params = network_def.init(init_rng, **network_args)['params']
         network =  MetaTrainState.create(
             network_def,

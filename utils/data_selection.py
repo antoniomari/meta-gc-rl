@@ -73,6 +73,7 @@ def fetch_meta_batch(
     filter_and_max_len: tuple,
     meta_batch_size: Optional[int] = None,
     exclude: Optional[List[int]] = None,
+    fix_actor_goal: Optional[float] = None,
     verbose: bool = False,
 ) -> Tuple[dict, np.ndarray]:
     """
@@ -123,10 +124,11 @@ def fetch_meta_batch(
                 filt_used,
                 goal,
                 _cfg_get(finetune_config, "ratio"),
-                _cfg_get(finetune_config, "fix_actor_goal"),
+                fix_actor_goal if fix_actor_goal is not None else _cfg_get(finetune_config, "fix_actor_goal"),
                 finetune_kwargs=finetune_config,
                 return_indices=True,
             )
+
             return batch, idxs
 
     return (None, None)

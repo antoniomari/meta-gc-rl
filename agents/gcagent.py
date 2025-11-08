@@ -12,7 +12,7 @@ class GCAgent(flax.struct.PyTreeNode):
 
     @jax.jit
     def sample_actions(self, observations, goals=None, seed=None, temperature: float = 1.0):
-        dist = self.network.select('actor')(observations, goals, temperature=temperature)
+        dist = self.network.select('actor')(observations, goals, temperature=temperature, params=self.network.params)
         actions = dist.sample(seed=seed)
         if not self.config.get('discrete'):
             actions = jnp.clip(actions, -1, 1)
@@ -36,7 +36,7 @@ class MetaGCAgent(flax.struct.PyTreeNode):
 
     @jax.jit
     def sample_actions(self, observations, goals=None, seed=None, temperature: float = 1.0):
-        dist = self.network.select('actor')(observations, goals, temperature=temperature)
+        dist = self.network.select('actor')(observations, goals, temperature=temperature, params=self.network.params)
         actions = dist.sample(seed=seed)
         if not self.config.get('discrete'):
             actions = jnp.clip(actions, -1, 1)

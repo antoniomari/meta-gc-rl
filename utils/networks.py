@@ -202,7 +202,7 @@ class GCActor(nn.Module):
         if self.state_dependent_std:
             log_stds = self.log_std_net(outputs)
         else:
-            if self.const_std:
+            if self.const_std: # std=1
                 log_stds = jnp.zeros_like(means)
             else:
                 log_stds = self.log_stds
@@ -213,6 +213,7 @@ class GCActor(nn.Module):
         if self.tanh_squash:
             distribution = TransformedWithMode(distribution, distrax.Block(distrax.Tanh(), ndims=1))
 
+        # The actor returns a gaussian distribution over actions
         return distribution
 
 
@@ -286,6 +287,9 @@ class GCValue(nn.Module):
     def setup(self):
         mlp_module = MLP
         if self.ensemble:
+            # If ensemble mode is enabled, wrap the MLP in an ensemble of size 2 using ensemblize.
+            # This means the model will maintain two independent copies ("heads") of the MLP network,
+            # allowing the value function to represent two separate estimations (commonly Q1 and Q2 for double Q-learning).
             mlp_module = ensemblize(mlp_module, 2)
         value_net = mlp_module((*self.hidden_dims, 1), activate_final=False, layer_norm=self.layer_norm)
 
@@ -309,6 +313,7 @@ class GCValue(nn.Module):
             inputs.append(actions)
         inputs = jnp.concatenate(inputs, axis=-1)
 
+        # It will return a tuple of 2 values if ensemble mode is enabled, one for each head.
         v = self.value_net(inputs).squeeze(-1)
 
         return v

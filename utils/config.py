@@ -116,6 +116,7 @@ class GCTTTConfig:
     video_episodes: int = 0
     video_frame_skip: int = 3
     eval_on_cpu: int = 1
+    training_fix_actor_goal: float = 1.0
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "GCTTTConfig":
@@ -146,6 +147,7 @@ class GCTTTConfig:
             video_episodes=int(data.get("video_episodes", cls.video_episodes)),
             video_frame_skip=int(data.get("video_frame_skip", cls.video_frame_skip)),
             eval_on_cpu=int(data.get("eval_on_cpu", cls.eval_on_cpu)),
+            training_fix_actor_goal=float(data.get("training_fix_actor_goal", cls.training_fix_actor_goal)),
         )
 
 

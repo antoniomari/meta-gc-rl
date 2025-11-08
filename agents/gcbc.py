@@ -24,7 +24,9 @@ class GCBCAgent(GCAgent):
 
     def actor_loss(self, batch, grad_params, rng=None):
         """Compute the BC actor loss."""
+        # Actor dist is gaussian distribution over actions
         dist = self.network.select('actor')(batch['observations'], batch['actor_goals'], params=grad_params)
+        # log_prob is the log probability of the actions under the actor distribution
         log_prob = dist.log_prob(batch['actions'])
 
         actor_loss = -log_prob.mean()
@@ -73,21 +75,6 @@ class GCBCAgent(GCAgent):
 
         # Return a new immutable agent with updated network and PRNG + metrics
         return self.replace(network=new_network, rng=new_rng), info
-
-    @jax.jit
-    def sample_actions(
-        self,
-        observations,
-        goals=None,
-        seed=None,
-        temperature=1.0,
-    ):
-        """Sample actions from the actor."""
-        dist = self.network.select('actor')(observations, goals, temperature=temperature)
-        actions = dist.sample(seed=seed)
-        if not self.config['discrete']:
-            actions = jnp.clip(actions, -1, 1)  # so for each dim we clip in -1, 1
-        return actions
 
     @classmethod
     def create(
