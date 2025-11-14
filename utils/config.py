@@ -40,6 +40,7 @@ class FinetuneConfig:
         filter_by_recursive_mdp: Enable recursive-MDP filtering.
         min_steps: Minimum number of fine-tuning steps to perform.
         replan_horizon: Horizon for replanning during fine-tuning.
+        actor_only: If True, only update actor during training (not critic/value).
     """
 
     ratio: float = 0.5
@@ -64,6 +65,7 @@ class FinetuneConfig:
     filter_by_recursive_mdp: bool = False
     min_steps: int = 10
     replan_horizon: int = 100
+    actor_only: bool = False
 
     def __getitem__(self, key):
         """Make the config subscriptable like a dictionary."""
@@ -85,6 +87,9 @@ class GCTTTConfig:
     Attributes cover experiment identity, environment and dataset selection,
     optional checkpoints, agent and fine-tuning sub-configs, and evaluation
     controls (frequency, tasks, and device hints).
+
+    Attributes:
+        plot_interval: Interval (in training steps) for creating plots during training.
     """
 
     run_group: str = "debug"
@@ -117,6 +122,7 @@ class GCTTTConfig:
     video_frame_skip: int = 3
     eval_on_cpu: int = 1
     training_fix_actor_goal: float = 1.0
+    plot_interval: int = 100  # Interval for creating plots during training
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "GCTTTConfig":
@@ -148,6 +154,7 @@ class GCTTTConfig:
             video_frame_skip=int(data.get("video_frame_skip", cls.video_frame_skip)),
             eval_on_cpu=int(data.get("eval_on_cpu", cls.eval_on_cpu)),
             training_fix_actor_goal=float(data.get("training_fix_actor_goal", cls.training_fix_actor_goal)),
+            plot_interval=int(data.get("plot_interval", cls.plot_interval)),
         )
 
 
@@ -162,7 +169,18 @@ def load_config(config_path: Union[str, Path]) -> GCTTTConfig:
     """
     path = Path(config_path)
     with path.open("r") as f:
-        data: Dict[str, Any] = yaml.safe_load(f) or {}
+        try:
+            # Try safe_load first (preferred for security)
+            data: Dict[str, Any] = yaml.safe_load(f) or {}
+        except yaml.constructor.ConstructorError as e:
+            # If safe_load fails due to Python-specific tags (like !!python/tuple),
+            # fall back to unsafe_load. This is safe here since we're loading
+            # config files saved by our own codebase.
+            if "python" in str(e) or "tuple" in str(e):
+                f.seek(0)  # Reset file pointer
+                data: Dict[str, Any] = yaml.unsafe_load(f) or {}
+            else:
+                raise
     return GCTTTConfig.from_dict(data)
 
 

@@ -299,7 +299,8 @@ def gc_ttt_critic(
                 )
 
                 # Update the agent with the sampled batch.
-                agent_ft, update_info = agent_ft.update(batch, finetuning=True)
+                # Note: in the original code (as here) the optimizer is never reset, consider using reset_inner_opt=i==0
+                agent_ft, update_info = agent_ft.update(batch, finetuning=True, reset_inner_opt=False)
                 add_to(finetune_stats, flatten(update_info))
 
             # Log the filter after fine-tuning, also show the cuurent state of the agent as red
@@ -456,7 +457,7 @@ def gc_ttt_critic_free(
             num_steps = int(_cfg_get(finetune_config, "num_steps", 0)) if _filter.sum() else 0
 
         t_finetune_start = time.time()
-        for _ in range(num_steps):
+        for i in range(num_steps):
             # Sample a batch from the dataset using the filter.
             # The batch will contain only the samples that match the filter.
             batch = train_dataset.active_sample(
@@ -468,7 +469,8 @@ def gc_ttt_critic_free(
                 finetune_kwargs=current_finetune_config,
             )
             # Update the agent with the sampled batch.
-            agent, info = agent.update(batch, finetuning=True)
+            # Note: in the original code (as here) the optimizer is never reset, consider using reset_inner_opt=i==0
+            agent, info = agent.update(batch, finetuning=True, reset_inner_opt=False)
             add_to(finetune_stats, flatten(info))
         print(f"time for finetuning {num_steps} steps", time.time() - t_finetune_start)
 
@@ -551,30 +553,11 @@ def evaluate(
 
     renders = []
 
-    """
-    items = []
-    for i in trange(config.eval_episodes + config.video_episodes):
-        should_render = i >= config.eval_episodes
+    # Create progress bar
+    pbar = trange(config.eval_episodes + config.video_episodes, desc=f"Task {task_id}")
+    success_count = 0
 
-        observation, info = env.reset(
-            options=dict(task_id=task_id, render_goal=should_render)
-        )
-        goal = info.get("goal")
-
-        items.append((observation, goal))
-
-    num_workers = 5  # tune (2–4 is usually safe)
-    print("Creating filters for datasets...")
-    filter_start_time = time.time()
-    with ThreadPoolExecutor(max_workers=num_workers) as ex:
-        results = list(ex.map(lambda args: train_dataset.prepare_active_sample(agent, args[0], args[1], config.finetune, log_filter=False), items))
-    filter_end_time = time.time()
-    print(f"Creating filters for datasets took {filter_end_time - filter_start_time:.4f} seconds")
-
-    print(results)
-    """
-
-    for i in trange(config.eval_episodes + config.video_episodes):
+    for i in pbar:
         agent_ft = clone_agent(agent)             # working copy for finetuning
 
         # Render only video episodes
@@ -634,6 +617,18 @@ def evaluate(
             )
 
         if i < config.eval_episodes:
+            # Extract success from info
+            success = info.get("success", False)
+            if success:
+                success_count += 1
+
+            # Update progress bar with success info
+            success_rate = success_count / (i + 1)
+            success_str = "✓" if success else "✗"
+            pbar.set_postfix({
+                'success': f"{success_str} {success_rate:.1%} ({success_count}/{i+1})"
+            })
+
             # print(info)
             add_to(stats, flatten(info))
             trajs.append(traj)
