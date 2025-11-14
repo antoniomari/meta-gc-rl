@@ -2,7 +2,7 @@ run_group: debug
 seed: 0
 env_name: antmaze-medium-stitch-v0
 data_ratio: 1.0
-working_dir: exp/antmaze_stitch/iql
+working_dir: exp/antmaze_stitch/iql_ddpgbc
 restore_path: null
 restore_epoch: null
 

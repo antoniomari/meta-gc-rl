@@ -172,224 +172,15 @@ Examples:
                         help='Override automatic wandb group name (for testing purposes)')
     parser.add_argument('--training_fix_actor_goal', type=float, dest='training_fix_actor_goal',
                         help='Override training_fix_actor_goal value (float, default: 1.0)')
+    parser.add_argument('--plot_interval', type=int, dest='plot_interval',
+                        help='Override plot_interval value (int, interval for creating plots, default: 100)')
+    parser.add_argument('--finetune.actor_only', action='store_true', dest='finetune_actor_only',
+                        help='Override finetune.actor_only to True (only update actor during training)')
 
     return parser.parse_args()
 
 
 # META Learning methods to run: standard maml, FOMAML, Reptile
-
-
-"""
-class DataSelectionCache:
-    def __init__(self, cache_max_size=100):
-        self.cache_max_size = cache_max_size
-        self.starts = None
-        self.goals = None
-        self.caches = [None] * cache_max_size
-        self.size = 0
-        self.write_idx = 0
-        self.start_dim = None
-        self.goal_dim = None
-
-    def maybe_reset(self, start_state_np, goal_np, cache_max_size):
-        if self.cache_max_size != cache_max_size:
-            self.__init__(cache_max_size)
-        if self.starts is None or self.goals is None:
-            self.start_dim = start_state_np.shape[0]
-            self.goal_dim = goal_np.shape[0]
-            self.starts = np.zeros((self.cache_max_size, self.start_dim), dtype=start_state_np.dtype)
-            self.goals = np.zeros((self.cache_max_size, self.goal_dim), dtype=goal_np.dtype)
-            self.caches = [None] * self.cache_max_size
-            self.size = 0
-            self.write_idx = 0
-
-    def lookup(self, start_state_np, goal_np, threshold_dist):
-        if self.size == 0:
-            return None
-        valid_range = slice(0, self.size)
-        cached_starts = self.starts[valid_range]
-        cached_goals = self.goals[valid_range]
-        start_dists = np.linalg.norm(cached_starts - start_state_np, axis=1)
-        goal_dists = np.linalg.norm(cached_goals - goal_np, axis=1)
-        mask = (start_dists < threshold_dist) & (goal_dists < threshold_dist)
-        if np.any(mask):
-            valid_indices = np.where(mask)[0]
-            total_dists = start_dists[valid_indices] + goal_dists[valid_indices]
-            idx = valid_indices[np.argmin(total_dists)]
-            return self.caches[idx]
-        return None
-
-    def insert(self, start_state_np, goal_np, _filter, max_len):
-        idx = self.write_idx
-        self.starts[idx] = np.copy(start_state_np)
-        self.goals[idx] = np.copy(goal_np)
-        self.caches[idx] = (np.copy(_filter), max_len)
-        self.write_idx = (idx + 1) % self.cache_max_size
-        if self.size < self.cache_max_size:
-            self.size += 1
-
-def fetch_goal_conditioned_batch(
-    agent: GCAgent,
-    train_dataset: GCDataset,
-    start_states,
-    goals,
-    finetune_config,
-    threshold_dist: float = 1.5,
-    cache_max_size: int = 100,
-    verbose: bool = False
-):
-    ""
-    Parallel version: start_states and goals are batches (np.ndarray or list) of shape [B, ...].
-    Returns lists of train_batch and test_batch, one per (start_state, goal) pair.
-    This version is parallelized over the batch using numpy vectorization where possible (not multithreaded, no for over batch).
-    ""
-    # Use a function attribute for the cache instead of a singleton/global
-    if not hasattr(fetch_goal_conditioned_batch, "_cache"):
-        fetch_goal_conditioned_batch._cache = DataSelectionCache(cache_max_size)
-    cache = fetch_goal_conditioned_batch._cache
-
-    # Set verbose flag for the function
-    fetch_goal_conditioned_batch._verbose = verbose
-
-    # Convert to numpy arrays if not already
-    start_states_np = np.asarray([_to_np(s).flatten() for s in start_states])
-    goals_np = np.asarray([_to_np(g).flatten() for g in goals])
-
-    batch_size = start_states_np.shape[0]
-    # For cache, still use numpy arrays (cache is CPU)
-    cache.maybe_reset(
-        start_states_np[0],
-        goals_np[0],
-        cache_max_size
-    )
-
-    # Prepare arrays for cache lookup
-    if cache.size > 0:
-        valid_range = slice(0, cache.size)
-        cached_starts = cache.starts[valid_range]  # [N, D]
-        cached_goals = cache.goals[valid_range]    # [N, D]
-    else:
-        cached_starts = np.zeros((0, start_states_np.shape[1]), dtype=start_states_np.dtype)
-        cached_goals = np.zeros((0, goals_np.shape[1]), dtype=goals_np.dtype)
-
-    # Timer for getting the filter
-    t_filter_start = time.time()
-    # Vectorized cache lookup for all batch elements (on CPU)
-    if cache.size > 0:
-        # [B, N, D]
-        start_diffs = start_states_np[:, None, :] - cached_starts[None, :, :]
-        goal_diffs = goals_np[:, None, :] - cached_goals[None, :, :]
-        # [B, N]
-        start_dists = np.linalg.norm(start_diffs, axis=2)
-        goal_dists = np.linalg.norm(goal_diffs, axis=2)
-        # [B, N]
-        mask = (start_dists < threshold_dist) & (goal_dists < threshold_dist)
-        # For each batch element, find the best cache index (or -1 if none)
-        any_mask = np.any(mask, axis=1)
-        # [B] - index of best cache or -1
-        best_indices = -np.ones(batch_size, dtype=int)
-        for i in np.where(any_mask)[0]:
-            valid_indices = np.where(mask[i])[0]
-            if len(valid_indices) > 0:
-                total_dists = start_dists[i, valid_indices] + goal_dists[i, valid_indices]
-                idx = valid_indices[np.argmin(total_dists)]
-                best_indices[i] = idx
-        # Now, for each batch element, get cache hit or miss
-        cache_hit_mask = best_indices != -1
-        cache_miss_mask = ~cache_hit_mask
-        cached_results = [
-            cache.caches[int(idx)] if idx != -1 else None
-            for idx in best_indices
-        ]
-    else:
-        cache_hit_mask = np.zeros(batch_size, dtype=bool)
-        cache_miss_mask = ~cache_hit_mask
-        cached_results = [None] * batch_size
-
-    # Prepare _filter and max_len for all batch elements
-    filters = [None] * batch_size
-    max_lens = [None] * batch_size
-
-    # Fill in cache hits
-    if np.any(cache_hit_mask):
-        hit_indices = np.where(cache_hit_mask)[0]
-        for i in hit_indices:
-            _filter, max_len = cached_results[i]
-            filters[i] = _filter
-            max_lens[i] = max_len
-
-    # For cache misses, call prepare_active_sample in a vectorized way (as much as possible)
-    miss_indices = np.where(cache_miss_mask)[0]
-    if len(miss_indices) > 0:
-        # Prepare all args for misses
-        miss_start_states = [start_states[i] for i in miss_indices]
-        miss_goals = [goals[i] for i in miss_indices]
-        # No for loop: use numpy vectorization is not possible for arbitrary python calls,
-        # but we can use list comprehensions (which is as parallel as possible in python)
-        results = [
-            train_dataset.prepare_active_sample(agent, s, g, finetune_config, log_filter=False, mc_quantile=finetune_config.get("mc_quantile_train", None))
-            for s, g in zip(miss_start_states, miss_goals)
-        ]
-        for idx, (filt, max_len) in zip(miss_indices, results):
-            filters[idx] = filt
-            max_lens[idx] = max_len
-            if cache.size < cache.cache_max_size:
-                # Insert using numpy arrays (cache is CPU)
-                cache.insert(
-                    start_states_np[idx],
-                    goals_np[idx],
-                    filt,
-                    max_len
-                )
-    t_filter_end = time.time()
-    if hasattr(fetch_goal_conditioned_batch, '_verbose') and fetch_goal_conditioned_batch._verbose:
-        print(f"Time for getting the filter: {t_filter_end - t_filter_start:.4f} seconds")
-
-    # Timer for fetching the batch
-    t_batch_start = time.time()
-
-    # Now, for each batch element, build train/test batches
-    # Vectorized: build all batches at once if possible, else use list comprehension
-    batch_size_val = _cfg_get(finetune_config, "batch_size")
-    total_batch_size = 2 * batch_size_val
-
-    # Prepare all batch args
-    t_all_batches_start = time.time()
-    all_batches = []
-    for i in range(batch_size):
-        _filter = filters[i]
-        goal = goals[i]
-        if _filter is None or _filter.sum() == 0:
-            all_batches.append(None)
-        else:
-            batch = train_dataset.active_sample(
-                total_batch_size,
-                _filter,
-                goal,
-                _cfg_get(finetune_config, "ratio"),
-                _cfg_get(finetune_config, "fix_actor_goal"),
-                finetune_kwargs=finetune_config,
-            )
-            all_batches.append(batch)
-    t_all_batches_end = time.time()
-    if hasattr(fetch_goal_conditioned_batch, '_verbose') and fetch_goal_conditioned_batch._verbose:
-        print(f"Time for getting all batches: {t_all_batches_end - t_all_batches_start:.4f} seconds")
-
-    # Now split into train/test batches
-    batches = []
-
-    for batch in all_batches:
-        if batch is not None:
-            batches.append(
-                (
-                    {k: v[:batch_size_val] for k, v in batch.items()},
-                    {k: v[batch_size_val:] for k, v in batch.items()}
-                )
-            )
-
-    return batches
-
-"""
 
 
 def fetch_random_batch(
@@ -607,14 +398,20 @@ def get_exp_and_group_names(cfg, env_name_short, exp_name):
         group_name = f"INIT-{env_name_short}-{cfg.finetune.actor_loss}"
     else:
         if cfg.meta_algorithm is None:
-            group_name = f"{env_name_short}-{cfg.finetune.actor_loss}-PT"  # Pretraining
+            algorithm_suffix = "PT"  # Pretraining
         else:
             if cfg.meta_algorithm == "reptile":
-                group_name = f"{env_name_short}-{cfg.finetune.actor_loss}-RX"  # Stands for Reptile-fixed
+                algorithm_suffix = "RX"  # Stands for Reptile-fixed
             elif cfg.meta_algorithm == "fomaml":
-                group_name = f"{env_name_short}-{cfg.finetune.actor_loss}-FX"  # Stands for FOMAML-fixed
+                algorithm_suffix = "FX"  # Stands for FOMAML-fixed
             else:
-                group_name = f"{env_name_short}-{cfg.finetune.actor_loss}-{cfg.meta_algorithm.upper()}"
+                algorithm_suffix = cfg.meta_algorithm.upper()
+
+        # Append "A" to algorithm suffix if actor_only is True
+        if cfg.finetune.actor_only:
+            algorithm_suffix += "A"
+
+        group_name = f"{env_name_short}-{cfg.finetune.actor_loss}-{algorithm_suffix}"
 
         # Add type of task
         if cfg.train_on_test_goal:
@@ -687,6 +484,121 @@ def log_test_loss(test_info, cfg: GCTTTConfig, save_path: str, inner_step: int, 
         writer.writerow([meta_step, inner_step, test_info])
 
 
+def checkpoint_save_path(cfg: GCTTTConfig, wandb_group: str):
+    # folder structure:
+    # $working_dir/   # Contains env and agent info
+    #   - {wandb_group}/
+    #       - seed/
+    #         -
+    #           - checkpoint.pt
+    save_path = os.path.join(cfg.working_dir, wandb_group, f"seed{cfg.seed}")
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    return save_path
+
+
+def plot_test_loss_inner_steps(plot_dict: dict, step: int, cfg: GCTTTConfig):
+    """
+    Create plots of test losses vs inner steps and log them to wandb.
+
+    Args:
+        plot_dict: Dictionary where keys are inner_step (int) and values are batch_info dicts
+        step: Current training step
+        cfg: Configuration object
+
+    Returns:
+        None (logs plots directly to wandb)
+    """
+    if not plot_dict:
+        raise ValueError(f"[Plot] plot_dict is empty at step {step}, skipping plot creation")
+        return
+
+    # Extract inner steps and sort them
+    inner_steps = sorted([k for k in plot_dict.keys() if isinstance(k, int)])
+    if not inner_steps:
+        raise ValueError(f"[Plot] No valid inner steps found in plot_dict at step {step}, skipping plot creation")
+        return
+
+    print(f"[Plot] Creating plots at step {step} with inner_steps: {inner_steps}")
+
+    # Extract the metrics for each inner step
+    metrics_to_plot = {
+        "training/test/total_loss": "test/total_loss",
+        "training/test/value/value_loss": "test/value/value_loss",
+        "training/test/critic/critic_loss": "test/critic/critic_loss",
+        "training/test/actor/actor_loss": "test/actor/actor_loss",
+    }
+
+    # Try alternative key names if the primary ones don't exist
+    alt_keys = {
+        "test/total_loss": ["test/total_loss"],
+        "test/value/value_loss": ["test/value/value_loss", "value/value_loss"],
+        "test/critic/critic_loss": ["test/critic/critic_loss", "critic/critic_loss"],
+        "test/actor/actor_loss": ["test/actor/actor_loss", "actor/actor_loss"],
+    }
+
+    # Collect data for each metric
+    plot_data = {}
+    for wandb_key, base_key in metrics_to_plot.items():
+        values = []
+        valid_steps = []
+
+        for inner_step in inner_steps:
+            batch_info = plot_dict[inner_step]
+            value = None
+
+            # Try primary key
+            if base_key in batch_info:
+                value = batch_info[base_key]
+            else:
+                # Try alternative keys
+                for alt_key in alt_keys.get(base_key, []):
+                    if alt_key in batch_info:
+                        value = batch_info[alt_key]
+                        break
+
+            if value is not None:
+                # Convert to float if needed
+                if hasattr(value, 'item'):
+                    value = float(value.item())
+                else:
+                    value = float(value)
+                values.append(value)
+                valid_steps.append(inner_step)
+
+        if values:
+            plot_data[wandb_key] = {
+                "inner_steps": valid_steps,
+                "values": values
+            }
+
+    if not plot_data:
+        raise ValueError(f"[Plot] No plot data collected at step {step}. Available keys in batch_info: {list(plot_dict[inner_steps[0]].keys()) if inner_steps else 'N/A'}")
+
+    # Create plots
+    for wandb_key, data in plot_data.items():
+        buf = io.BytesIO()
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        ax.plot(data["inner_steps"], data["values"], marker='o', linewidth=2, markersize=6)
+        ax.set_xlabel("Inner Step", fontsize=12)
+        ax.set_ylabel(wandb_key.split("/")[-1].replace("_", " ").title(), fontsize=12)
+        ax.set_title(f"{wandb_key} vs Inner Step (Training Step {step})", fontsize=14)
+        ax.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+        plt.savefig(buf, format="png", dpi=150)
+        plt.close(fig)
+        buf.seek(0)
+        img = Image.open(buf)
+        img_array = np.array(img)
+        # Use plot/ prefix to organize plots in wandb
+        plot_name = "plot/" + wandb_key.replace("/", "_")
+        wandb.log({plot_name: wandb.Image(img_array)}, step=step)
+        print(f"[Plot] Logged {plot_name} to wandb at step {step}")
+        del img_array, img, buf
+
+
 def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
 
     if cfg.agent['agent_name'].startswith("meta_"):
@@ -735,6 +647,7 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
         "train_on_test_goal": cfg.train_on_test_goal,
         "use_random_batch": cfg.use_random_batch,
         "training_fix_actor_goal": cfg.training_fix_actor_goal,
+        "plot_interval": getattr(cfg, "plot_interval", 100),
     }
     setup_wandb(
         project="TTT_AllFinalRuns", group=group_name, name=exp_name, config=wandb_config
@@ -742,7 +655,8 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
 
     # Save current expanded config in the experiment dir
     os.makedirs(cfg.working_dir, exist_ok=True)
-    with open(os.path.join(cfg.working_dir, "config.yaml"), "w") as f:
+    exp_path = os.path.dirname(checkpoint_save_path(cfg, group_name))
+    with open(os.path.join(exp_path, "config.yaml"), "w") as f:
         yaml.dump(wandb_config, f)
 
     # Set up environment and dataset.
@@ -774,7 +688,8 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
         )
 
     agent_class = agents[config_agent["agent_name"]]
-    agent: MetaGCAgent = agent_class.create(
+    agent: MetaGCAgent
+    agent = agent_class.create(
         cfg.seed,
         example_batch["observations"],
         example_batch["actions"],
@@ -850,9 +765,12 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
                 num_ttt_steps=num_ttt_steps)
         # Evaluate only
 
+    plot_interval = getattr(cfg, "plot_interval", 100)
+
     for i in tqdm.tqdm(
         range(1, cfg.train_steps + 1), smoothing=0.1, dynamic_ncols=True
     ):
+        plot_dict = {}  # Initialize plot_dict for each iteration
 
         # Normal pretraining (no meta-learning)
         if i < META_LEARNING_START_STEP:
@@ -888,12 +806,13 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
                 print(f"[Timer] Sampling 1 batch for 1 task took {t_fetch_end - t_fetch_start:.4f} seconds.")
                 print(f"[Memory] Before fetch: {memory_before_fetch:.2f} MB, After fetch: {memory_after_fetch:.2f} MB (+{memory_after_fetch - memory_before_fetch:.2f} MB)")
 
-            agent, update_info = agent.update(train_batch)
+            agent, update_info = agent.update(train_batch, actor_only=cfg.finetune.actor_only)
         else:
             # Sample start states and goals for each task
             start_states, goals = sample_start_goal_pairs(train_dataset, env, META_BATCH_SIZE, cfg.train_on_test_goal, is_stitch_dataset="stitch" in cfg.env_name)
 
             update_info = []
+            # plot_dict is already initialized above
             is_fomaml = META_LEARNING_ALGORITHM == "fomaml"
 
             # Get batch filters for all tasks
@@ -916,6 +835,7 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
             memory_before_inner = get_memory_usage()
 
             for num_task in range(META_BATCH_SIZE):
+                info_task = {}
 
                 fetched = False
                 while not fetched:
@@ -931,11 +851,12 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
                     goals[0],
                     cfg.finetune,
                     batch_filters_and_max_lens[0],
-                    meta_batch_size=int(task_filter.sum() * cfg.test_batch_fraction),
+                    meta_batch_size=128, # NOTE: I fixed this to avoid recompilation
                     fix_actor_goal=cfg.training_fix_actor_goal,
                     verbose=True
                 )
 
+                info_task = {}
                 for inner_step in range(config_agent.get("inner_loop_steps", 1)):
 
                     train_batch, _ = fetch_meta_batch(
@@ -979,11 +900,12 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
                     agent, batch_info = agent.meta_inner_update(
                         num_task,
                         train_batch,
-                        test_batch if META_LEARNING_ALGORITHM in ["fomaml", "maml"] else None,
+                        test_batch,
                         is_fomaml=is_fomaml,
                         reset_inner_opt=inner_step == 0,
                         average_test_gradients=cfg.average_test_gradients,
-                        inner_step=inner_step
+                        inner_step=inner_step,
+                        actor_only=cfg.finetune.actor_only
                     )
 
                     # Log test losses
@@ -1010,9 +932,28 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
                                 meta_step=i
                             )
 
+                    # Save batch_info for plotting (for all meta-learning algorithms when it's time to plot)
+                    if (i - 1) % plot_interval == 0 and META_LEARNING_ALGORITHM is not None:
+                        # Save batch_info for current inner_step to a dictionary
+                        plot_dict[inner_step] = batch_info
 
+                    if inner_step == 0:
+                        # take all keys that starts with "training/pre_test" and insert them into update_info_to_append
+                        info_task.update({k: batch_info[k] for k in batch_info.keys() if k.startswith("pre_test")})
                     if inner_step == config_agent.get("inner_loop_steps", 1) - 1:
-                        update_info.append(batch_info)
+                        # Extend all keys that do not start with "training/pre_test" into update_info_to_append
+                        info_task.update({k: batch_info[k] for k in batch_info.keys() if not k.startswith("pre_test")})
+
+                        # For all metrics with "training/pre_test/{metric_name}", compute "diff/{metric_name}" = "training/pre_test/{metric_name}" - "training/test/{metric_name}"
+                        diff_stats = {}
+                        for k in info_task.keys():
+                            if k.startswith("pre_test/"):
+                                metric_name = k[len("pre_test/"):]
+                                diff_stats[f"diff/{metric_name}"] = info_task[f"pre_test/{metric_name}"] - info_task[f"test/{metric_name}"]
+
+                        info_task.update(diff_stats)
+                        # Append info batch
+                        update_info.append(info_task)
 
             t_inner_end = time.time()
             memory_after_inner = get_memory_usage()
@@ -1063,7 +1004,11 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
             if val_dataset is not None:
                 # So... we sample only 1 batch for validation
                 val_batch = val_dataset.sample(config_agent["batch_size"])
-                _, val_info = agent.total_loss(val_batch, grad_params=agent.network.params)
+                _, val_info = agent.total_loss(
+                    val_batch,
+                    grad_params=agent.network.params,
+                    fixed_params=agent.network.params,
+                )
                 train_metrics.update(
                     {f"validation/{k}": v for k, v in val_info.items()}
                 )
@@ -1088,9 +1033,13 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
                     step=i,
                     num_ttt_steps=num_ttt_steps)
 
+        # Create plot.
+        if (i - 1) % plot_interval == 0:
+            plot_test_loss_inner_steps(plot_dict, i, cfg)
+
         # Save agent.
         if i % cfg.save_interval == 0:
-            save_agent(agent, cfg.working_dir, i)
+            save_agent(agent, checkpoint_save_path(cfg, group_name), i)
 
     train_logger.close()
     eval_logger.close()
@@ -1178,6 +1127,12 @@ if __name__ == "__main__":
 
     if args.training_fix_actor_goal is not None:
         cfg.training_fix_actor_goal = args.training_fix_actor_goal
+
+    if args.plot_interval is not None:
+        cfg.plot_interval = args.plot_interval
+
+    if args.finetune_actor_only:
+        cfg.finetune.actor_only = True
 
     print(f"Number of steps list: {cfg.finetune.num_steps_list}")
 
