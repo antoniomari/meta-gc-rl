@@ -164,6 +164,8 @@ def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to
         start_matches = jnp.sqrt(jnp.sum((_obs[..., :2] - obs[:2])**2, axis=-1)) < start_threshold
         if finetune_kwargs['relevance_by_value']:
             assert start_to_state_dist is not None, 'Distance from current obs to all states is needed.'
+
+            # 1 if the distance is less than the threshold, 0 otherwise
             start_matches = (start_to_state_dist < start_threshold).reshape(start_matches.shape)
         if non_relevance:
             # If non-relevance is enabled, we sample transitions from the buffer that are good under the optimality criterion but may be from anywhere over the state space (not necessarily close to our agent's state)
@@ -176,8 +178,16 @@ def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to
         shift_start_matches = np.zeros_like(start_matches)
         shift_start_matches[:, subtraj_min_steps:] = start_matches[:, :-subtraj_min_steps]
 
+        #
         scores = ((shift_start_matches.cumsum(-1) > 0) * state_to_goal_dist.reshape(start_matches.shape))
         scores = np.where(scores==0, scores.max(), scores)
+
+        # TODO: check this
+        # For each episode, scores is a 2D array (episodes x trajectory steps).
+        # scores.min(-1) finds the minimum score along the time axis for each episode,
+        # so scores.min(-1) is a 1D array where each element corresponds to the "best" (lowest) score found within that episode.
+        # np.argsort(...): sorts all episodes based on these minimum scores (from lowest to highest).
+        # The result is that ep_idxs contains the indices of the `num_selected_points` episodes that have the best (lowest) minimal score along their trajectory.
         ep_idxs = np.argsort(scores.min(-1))[:num_selected_points]
 
         if non_optimality:

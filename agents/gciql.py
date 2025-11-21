@@ -19,9 +19,10 @@ class GCIQLAgent(MetaGCAgent):
     This implementation supports both AWR (actor_loss='awr') and DDPG+BC (actor_loss='ddpgbc') for the actor loss.
     """
 
-    rng: Any
-    network:  MetaTrainState
-    config: Any = nonpytree_field()
+    # Defined in parent class MetaGCAgent
+    # rng: Any
+    # network:  MetaTrainState
+    # config: Any = nonpytree_field()
 
     @staticmethod
     def expectile_loss(adv, diff, expectile):
@@ -243,9 +244,9 @@ class GCIQLAgent(MetaGCAgent):
         self.target_update(initial_params, updated_params, 'critic')
         return updated_params, test_grads, final_opt_state, info, unscaled_updates
 
-    @functools.partial(jax.jit, static_argnames=("use_model_merging",))
-    def meta_update(self, use_model_merging=False):
-        new_network = self.network.meta_update(use_model_merging)
+    @functools.partial(jax.jit, static_argnames=("use_model_merging", "use_meta_optimizer", "annealing"))
+    def meta_update(self, use_model_merging=False, use_meta_optimizer=False, annealing=False):
+        new_network = self.network.meta_update(use_model_merging=use_model_merging, use_meta_optimizer=use_meta_optimizer, annealing=annealing)
         # USE TARGET UPDATE HERE instead of in inner-update
         # TODO: check for case of actor_only
         self.target_update(self.network.params, new_network.params, 'critic')

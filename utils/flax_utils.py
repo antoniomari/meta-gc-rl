@@ -421,7 +421,7 @@ class MetaTrainState(flax.struct.PyTreeNode):
 
         return updated_params, test_grads, new_inner_opt_state, info, unscaled_updates
 
-    def meta_update(self, use_model_merging=False, eps=None, **kwargs):
+    def meta_update(self, use_model_merging=False, eps=None, use_meta_optimizer=False, annealing=False, **kwargs):
         """
         Perform a meta-update using the list of updated parameters.
         If use_model_merging is True, perform a model merge update:
@@ -442,19 +442,40 @@ class MetaTrainState(flax.struct.PyTreeNode):
         if use_model_merging:
             if eps is None:
                 # Compute annealed merging_eps
-                if self.max_training_steps > 1:
+                if annealing:
                     merging_eps = self.merging_eps - (self.step - 1) / (self.max_training_steps - 1)
                     merging_eps = jnp.clip(merging_eps, 0.0, 1.0)
                 else:
+                    assert self.merging_eps >= 0.0, "merging_eps must be non-negative"
+                    assert self.merging_eps <= 1, "max_training_steps must be less than or equal to 1"
                     merging_eps = self.merging_eps
             else:
                 merging_eps = eps
 
             print(f'Merging eps: {merging_eps}')
 
-            merged_params = jax.tree_util.tree_map(
-                lambda p, up: p + merging_eps * (up - p), self.params, mean_updated_params
-            )
+
+            if use_meta_optimizer:
+
+                # NOTE: I am negating the gradient because the meta-optimizer goes
+                # in the opposite direction of model merging.
+                meta_grads = jax.tree_util.tree_map(lambda p, up: p - up, self.params, mean_updated_params)
+                meta_grads_structure = {
+                    'params': meta_grads,
+                    'learning_rate_multiplier': jnp.array(0.0)
+                }
+                # Prepare current values structure
+                current_values = {
+                    'params': self.params,
+                    'learning_rate_multiplier': self.learning_rate_multiplier
+                }
+                updates_structure, new_meta_opt_state = self.meta_opt.update(meta_grads_structure, self.meta_opt_state, current_values)
+                merged_params = optax.apply_updates(self.params, updates_structure['params'])
+            else:
+                merged_params = jax.tree_util.tree_map(
+                    lambda p, up: p + merging_eps * (up - p), self.params, mean_updated_params
+                )
+                new_meta_opt_state = self.meta_opt_state
 
             updated_params_list, test_loss_grads, inner_updates_list = self.init_updated_params_list(merged_params)
 
@@ -464,6 +485,7 @@ class MetaTrainState(flax.struct.PyTreeNode):
                 updated_params_list=updated_params_list,
                 test_loss_grads=test_loss_grads,
                 inner_updates_list=inner_updates_list,
+                meta_opt_state=new_meta_opt_state,
                 **kwargs,
             )
         else:

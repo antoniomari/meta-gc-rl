@@ -33,7 +33,8 @@ from utils.datasets import Dataset, GCDataset, HGCDataset
 from utils.env_utils import make_env_and_datasets
 from utils.evaluation import evaluate, _cfg_get
 from utils.flax_utils import restore_agent, save_agent
-from utils.log_utils import CsvLogger, get_exp_name, get_wandb_video, setup_wandb
+from utils.log_utils import CsvLogger, get_wandb_video, setup_wandb, get_exp_name
+from datetime import datetime
 from utils.data_selection import get_batch_filters, fetch_meta_batch
 from utils.config import GCTTTConfig, load_config
 from agents.gcagent import GCAgent, MetaGCAgent
@@ -176,6 +177,12 @@ Examples:
                         help='Override plot_interval value (int, interval for creating plots, default: 100)')
     parser.add_argument('--finetune.actor_only', action='store_true', dest='finetune_actor_only',
                         help='Override finetune.actor_only to True (only update actor during training)')
+    parser.add_argument('--use_meta_optimizer', action='store_true', dest='use_meta_optimizer',
+                        help='Use meta optimizer (only for reptile algorithm)')
+    parser.add_argument('--annealing', action='store_true', dest='annealing',
+                        help='Enable annealing (default: False, only for reptile algorithm)')
+    parser.add_argument('--no_optimality', action='store_true', dest='no_optimality',
+                        help='Set finetune.no_optimality to True (disable optimality filtering)')
 
     return parser.parse_args()
 
@@ -390,6 +397,49 @@ def evaluation_loop(
     jax.clear_caches()
     print("[Memory] Cleared memory after evaluation")
 
+
+
+# TODO: adjust implementation
+def get_exp_name_new(cfg):
+    """Return the experiment name."""
+    # experiment name consists:
+    # goal type prefix (TEST-GOALS or ALL-GOALS)
+    # agent_name (gciql or hiql)
+    # environment name parts: env_name_split[0] + '-' + env_name_split[2]
+    # agent.actor_loss (bc or awr)
+    # finetune.actor_loss (bc or awr)
+    # finetune.filter_by_mc
+    # finetune.mc_quantile
+    # finetune.mc_slack
+    # finetune.mc_similarity_threshold
+    # finetune.filter_by_recursive_mdp
+    # finetune.min_steps
+    # finetune.replan_horizon
+    # meta_algorithm (if not None)
+    # timestamp
+    # seed
+
+    exp_name = env_name
+    exp_name += f'_{cfg.agent["agent_name"]}'
+    exp_name += '_' + cfg.finetune.actor_loss
+    exp_name += '_' + str(cfg.finetune.filter_by_mc)
+    exp_name += '_' + str(cfg.finetune.mc_quantile)
+    exp_name += '_' + str(cfg.finetune.mc_slack)
+    exp_name += '_' + str(cfg.finetune.mc_similarity_threshold)
+    exp_name += '_' + str(cfg.finetune.filter_by_recursive_mdp)
+    exp_name += '_' + str(cfg.finetune.min_steps)
+    exp_name += '_' + str(cfg.finetune.replan_horizon)
+    # Add inner_loop_steps if present
+    inner_loop_steps = cfg.agent.get("inner_loop_steps", 1)
+    exp_name += '_' + str(inner_loop_steps) + 'inner'
+    # Add meta_batch_size if present
+    meta_batch_size = cfg.agent.get("meta_batch_size", 32)
+    exp_name += '_' + str(meta_batch_size) + 'meta'
+    exp_name += '_' + datetime.now().strftime('%Y%m%d_%H%M%S')
+    exp_name += f'_s{cfg.seed:03d}'
+    return exp_name
+
+
 # Create group name and experiment name using a helper function
 def get_exp_and_group_names(cfg, env_name_short, exp_name):
     # Create group name based on meta learning algorithm and parameters
@@ -411,6 +461,14 @@ def get_exp_and_group_names(cfg, env_name_short, exp_name):
         if cfg.finetune.actor_only:
             algorithm_suffix += "A"
 
+        # Append "MO" to algorithm suffix if use_meta_optimizer is True (only for reptile)
+        if cfg.meta_algorithm == "reptile" and getattr(cfg, 'use_meta_optimizer', False):
+            algorithm_suffix += "MO"
+
+        # Append "fix" to algorithm suffix if annealing is False (only for reptile)
+        if cfg.meta_algorithm == "reptile" and not getattr(cfg, 'annealing', False):
+            algorithm_suffix += "FIX"
+
         group_name = f"{env_name_short}-{cfg.finetune.actor_loss}-{algorithm_suffix}"
 
         # Add type of task
@@ -419,16 +477,15 @@ def get_exp_and_group_names(cfg, env_name_short, exp_name):
             group_name = "TEST-" + group_name
         elif cfg.use_random_batch:
             # Case of one task per sample in the batch
-            group_name = "MIXED-" + group_name
+            group_name = "RANDOM-" + group_name
         else:
             # Default case: all samples in the batch are from the same task
             group_name = "ALL-" + group_name
 
         # Add meta learning parameters if meta algorithm is present
-        if cfg.meta_algorithm is not None:
-            inner_steps = cfg.agent.get("inner_loop_steps", 1)
-            meta_batch_size = cfg.agent.get("meta_batch_size", 32)
-            group_name += f"-{inner_steps}-{meta_batch_size}"
+        inner_steps = cfg.agent.get("inner_loop_steps", 1)
+        meta_batch_size = cfg.agent.get("meta_batch_size", 32)
+        group_name += f"-{inner_steps}-{meta_batch_size}"
 
     # Add mc_quantile_train to group name if it was overwritten
     mc_quantile_train = cfg.finetune.get("mc_quantile_train")
@@ -443,8 +500,9 @@ def get_exp_and_group_names(cfg, env_name_short, exp_name):
     # Add merging_eps to group name if different from 1.0
     merging_eps = cfg.agent.get("merging_eps", 1.0)
     if merging_eps != 1.0 and cfg.meta_algorithm == "reptile":
-        group_name += f"-m_{merging_eps}"
-        exp_name += f"-m_{merging_eps}"
+        if not cfg.use_meta_optimizer:
+            group_name += f"-m_{merging_eps}"
+            exp_name += f"-m_{merging_eps}"
 
     # Add LR to group name if it was overwritten
     if 'lr' in cfg.agent:
@@ -767,69 +825,28 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
 
     plot_interval = getattr(cfg, "plot_interval", 100)
 
+    # If no meta learning, than meta_batch_size is 1
+    if META_LEARNING_ALGORITHM is None:
+       assert META_BATCH_SIZE == 1, "If no meta learning, then meta_batch_size must be 1"
+
     for i in tqdm.tqdm(
         range(1, cfg.train_steps + 1), smoothing=0.1, dynamic_ncols=True
     ):
         plot_dict = {}  # Initialize plot_dict for each iteration
 
-        # Normal pretraining (no meta-learning)
-        if i < META_LEARNING_START_STEP:
-            # 1. Sample 1 batch for one task
-            # Measure memory and time before sampling
-            memory_before_fetch = get_memory_usage()
-            t_fetch_start = time.time()
+        # Pretraining
+        if cfg.use_random_batch:
 
-            if cfg.use_random_batch:
-                train_batch = train_dataset.sample(cfg.finetune.batch_size)
-            else:
-                fetched = False
-                while not fetched:
-                    start_states, goals = sample_start_goal_pairs(train_dataset, env, 1, cfg.train_on_test_goal, is_stitch_dataset="stitch" in cfg.env_name)
-                    batch_filters_and_max_lens = get_batch_filters(train_dataset, agent, start_states, goals, cfg.finetune, mc_quantile=cfg.finetune.get("mc_quantile_train", None))
-                    task_filter = batch_filters_and_max_lens[0][0]
-                    if task_filter.sum() > 0:
-                        fetched = True
+            assert META_LEARNING_ALGORITHM is None, "If use_random_batch is True, then meta_learning_algorithm must be None"
 
-                # Sample test batch for the task
-                train_batch, train_batch_idx = fetch_meta_batch(
-                    train_dataset,
-                    goals[0],
-                    cfg.finetune,
-                    batch_filters_and_max_lens[0],
-                    fix_actor_goal=cfg.training_fix_actor_goal,
-                    verbose=True
-                )
-
-            t_fetch_end = time.time()
-            memory_after_fetch = get_memory_usage()
-            if verbose:
-                print(f"[Timer] Sampling 1 batch for 1 task took {t_fetch_end - t_fetch_start:.4f} seconds.")
-                print(f"[Memory] Before fetch: {memory_before_fetch:.2f} MB, After fetch: {memory_after_fetch:.2f} MB (+{memory_after_fetch - memory_before_fetch:.2f} MB)")
-
+            train_batch = train_dataset.sample(cfg.finetune.batch_size)
             agent, update_info = agent.update(train_batch, actor_only=cfg.finetune.actor_only)
-        else:
-            # Sample start states and goals for each task
-            start_states, goals = sample_start_goal_pairs(train_dataset, env, META_BATCH_SIZE, cfg.train_on_test_goal, is_stitch_dataset="stitch" in cfg.env_name)
 
+        # Meta-learning aligned
+        else:
             update_info = []
             # plot_dict is already initialized above
             is_fomaml = META_LEARNING_ALGORITHM == "fomaml"
-
-            # Get batch filters for all tasks
-            t_get_batch_filters_start = time.time()
-            batch_filters_and_max_lens = get_batch_filters(
-                train_dataset,
-                agent,
-                start_states,
-                goals,
-                cfg.finetune,
-                mc_quantile=cfg.finetune.get("mc_quantile_train", None)
-            )
-            t_get_batch_filters_end = time.time()
-            if verbose:
-                print(f"[Timer] Get batch filters took {t_get_batch_filters_end - t_get_batch_filters_start:.4f} seconds.")
-
-
             # --- Inner Update (Meta-Learning) ---
             t_inner_start = time.time()
             memory_before_inner = get_memory_usage()
@@ -856,7 +873,6 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
                     verbose=True
                 )
 
-                info_task = {}
                 for inner_step in range(config_agent.get("inner_loop_steps", 1)):
 
                     train_batch, _ = fetch_meta_batch(
@@ -897,43 +913,46 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
                                 "post": lambda test_info: log_test_loss(test_info, cfg)
                             }
 
-                    agent, batch_info = agent.meta_inner_update(
-                        num_task,
-                        train_batch,
-                        test_batch,
-                        is_fomaml=is_fomaml,
-                        reset_inner_opt=inner_step == 0,
-                        average_test_gradients=cfg.average_test_gradients,
-                        inner_step=inner_step,
-                        actor_only=cfg.finetune.actor_only
-                    )
+                    if META_LEARNING_ALGORITHM is None:
+                        agent, batch_info = agent.update(train_batch, actor_only=cfg.finetune.actor_only)
+                    else:
+                        agent, batch_info = agent.meta_inner_update(
+                            num_task,
+                            train_batch,
+                            test_batch,
+                            is_fomaml=is_fomaml,
+                            reset_inner_opt=inner_step == 0,
+                            average_test_gradients=cfg.average_test_gradients,
+                            inner_step=inner_step,
+                            actor_only=cfg.finetune.actor_only
+                        )
 
                     # Log test losses
-                    if META_LEARNING_ALGORITHM in ["fomaml", "maml"]:
-                        save_path = os.path.join(
-                            cfg.working_dir,
-                            f"{'avg-test-grad' if cfg.average_test_gradients else ''}-{'TEST-GOALS'if cfg.train_on_test_goal else 'ALL-GOALS'}-{META_LEARNING_ALGORITHM}-{args.inner_loop_steps}-{args.meta_batch_size}",
-                            f"irl-{cfg.finetune.inner_lr}-lr-{cfg.finetune.lr}-test_loss.csv"
-                        )
-                        if inner_step == 0:
-                            log_test_loss(
-                                batch_info["pre_test/actor/actor_loss"],
-                                cfg,
-                                save_path,
-                                inner_step=inner_step,
-                                meta_step=i
-                            )
-                        elif inner_step in debug_inner_steps:
-                            log_test_loss(
-                                batch_info["test/actor/actor_loss"],
-                                cfg,
-                                save_path,
-                                inner_step=inner_step+1,
-                                meta_step=i
-                            )
+                    #if META_LEARNING_ALGORITHM in ["fomaml", "maml"]:
+                    #    save_path = os.path.join(
+                    #        cfg.working_dir,
+                    #        f"{'avg-test-grad' if cfg.average_test_gradients else ''}-{'TEST-GOALS'if cfg.train_on_test_goal else 'ALL-GOALS'}-{META_LEARNING_ALGORITHM}-{args.inner_loop_steps}-{args.meta_batch_size}",
+                    #        f"irl-{cfg.finetune.inner_lr}-lr-{cfg.finetune.lr}-test_loss.csv"
+                    #    )
+                    #    if inner_step == 0:
+                    #        log_test_loss(
+                    #            batch_info["pre_test/actor/actor_loss"],
+                    #            cfg,
+                    #            save_path,
+                    #            inner_step=inner_step,
+                    #            meta_step=i
+                    #        )
+                    #    elif inner_step in debug_inner_steps:
+                    #        log_test_loss(
+                    #            batch_info["test/actor/actor_loss"],
+                    #            cfg,
+                    #            save_path,
+                    #            inner_step=inner_step+1,
+                    #            meta_step=i
+                    #        )
 
                     # Save batch_info for plotting (for all meta-learning algorithms when it's time to plot)
-                    if (i - 1) % plot_interval == 0 and META_LEARNING_ALGORITHM is not None:
+                    if (i - 1) % plot_interval == 0:
                         # Save batch_info for current inner_step to a dictionary
                         plot_dict[inner_step] = batch_info
 
@@ -973,15 +992,16 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
             update_info = {k: np.mean([info[k] for info in update_info]) for k in update_info[0].keys()}
 
             # --- Meta Update (Meta-Learning) ---
-            t_meta_start = time.time()
-            memory_before_meta = get_memory_usage()
-            agent: MetaGCAgent = agent.meta_update(use_model_merging=META_LEARNING_ALGORITHM == "reptile")
-            memory_after_meta = get_memory_usage()
-            t_meta_end = time.time()
-            meta_update_time = t_meta_end - t_meta_start
-            if verbose:
-                print(f"[Timer] Meta update took {meta_update_time:.4f} seconds.")
-                print(f"[Memory] Before meta: {memory_before_meta:.2f} MB, After meta: {memory_after_meta:.2f} MB (+{memory_after_meta - memory_before_meta:.2f} MB)\n")
+            if META_LEARNING_ALGORITHM is not None:
+                t_meta_start = time.time()
+                memory_before_meta = get_memory_usage()
+                agent: MetaGCAgent = agent.meta_update(use_model_merging=META_LEARNING_ALGORITHM == "reptile", use_meta_optimizer=cfg.use_meta_optimizer, annealing=cfg.annealing)
+                memory_after_meta = get_memory_usage()
+                t_meta_end = time.time()
+                meta_update_time = t_meta_end - t_meta_start
+                if verbose:
+                    print(f"[Timer] Meta update took {meta_update_time:.4f} seconds.")
+                    print(f"[Memory] Before meta: {memory_before_meta:.2f} MB, After meta: {memory_after_meta:.2f} MB (+{memory_after_meta - memory_before_meta:.2f} MB)\n")
 
             # Clear JAX caches periodically to prevent memory growth
             if i % 100_000 == 0:  # Every 100k iterations
@@ -1134,6 +1154,20 @@ if __name__ == "__main__":
     if args.finetune_actor_only:
         cfg.finetune.actor_only = True
 
+    if args.no_optimality:
+        cfg.finetune.no_optimality = True
+
+    if args.use_meta_optimizer:
+        assert cfg.meta_algorithm == "reptile", "use_meta_optimizer is only supported for reptile algorithm"
+        assert cfg.agent['merging_eps'] == cfg.agent['lr']
+        cfg.use_meta_optimizer = True
+    else:
+        cfg.use_meta_optimizer = False
+    if args.annealing:
+        cfg.annealing = True
+    else:
+        cfg.annealing = False
+
     print(f"Number of steps list: {cfg.finetune.num_steps_list}")
 
     if cfg.finetune.filter_by_recursive_mdp:
@@ -1142,8 +1176,6 @@ if __name__ == "__main__":
         print("TTT no critique")
 
     main(cfg, verbose=args.verbose if args.verbose is not None else False, wandb_group=args.wandb_group)
-
-
 
 
 """

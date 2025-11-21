@@ -19,3 +19,9 @@ The hyperparameter settings used:
     - inner-steps and num-meta-batches fixed to 1
     - for `reptile`, merging eps=1
     - `(inner_lr, lr) = [(3e-04, 3e-04), (3e-05, 3e-04), (3e-05, 3e-05)]`
+
+
+
+
+Big hyperparam sweep.
+We want to assess the performance of our algorithms on TEST-Goals settings first and then on ALL-Goals

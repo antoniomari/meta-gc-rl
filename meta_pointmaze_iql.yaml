@@ -1,8 +1,8 @@
 run_group: debug
 seed: 0
-env_name: antmaze-medium-stitch-v0
+env_name: pointmaze-medium-stitch-v0
 data_ratio: 1.0
-working_dir: exp/antmaze_stitch/iql_ddpgbc
+working_dir: exp/pointmaze_stitch/iql_ddpgbc
 restore_path: null
 restore_epoch: null
 
@@ -11,9 +11,9 @@ agent:
   actor_loss: ddpgbc
   actor_p_randomgoal: 0.5
   actor_p_trajgoal: 0.5
-  alpha: 0.3
-  meta_batch_size: 32
-  inner_loop_steps: 10
+  alpha: 0.003
+  meta_batch_size: 1
+  inner_loop_steps: 1
 
 meta_algorithm: null  # Options: maml, fomaml, reptile
 train_on_test_goal: false  # Whether to use test goal for training batch fetching

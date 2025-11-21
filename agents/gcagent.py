@@ -152,8 +152,8 @@ class MetaGCAgent(flax.struct.PyTreeNode):
         return updated_params, test_grads, final_opt_state, info, unscaled_updates
 
 
-    @functools.partial(jax.jit, static_argnames=("use_model_merging",))
-    def meta_update(self, use_model_merging=False):
-        new_network = self.network.meta_update(use_model_merging)
+    @functools.partial(jax.jit, static_argnames=("use_model_merging", "use_meta_optimizer", "annealing"))
+    def meta_update(self, use_model_merging=False, use_meta_optimizer=False, annealing=False):
+        new_network = self.network.meta_update(use_model_merging=use_model_merging, use_meta_optimizer=use_meta_optimizer, annealing=annealing)
         return self.replace(network=new_network)
 
