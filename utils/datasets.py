@@ -99,12 +99,17 @@ def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to
         start_to_state_dist: Precomputed distance from start state to all states in the dataset.
     """
 
-    _obs = dataset['observations']
-    ep_id = dataset['terminals'].cumsum() // 2
+    _obs = dataset['observations'] # shape: (total_data_size, obs_dim)
+    # There are two terminals for the last two states of an episode
+    # So the sequence of terminal is like [0 0 1 1 0 0 0 1 1 0 0 0 0 0 1]
+    # (Cumsum terminal)//2  will be       [0 0 0 1 1 1 1 1 2 2 2 2 2 2 2]
+    # Shifted by one so the next episode starts after the last terminal
+    # of previous episode                 [0 0 0 0 1 1 1 1 1 2 2 2 2 2 2]
+    ep_id = dataset['terminals'].cumsum() // 2 # shape: (total_data_size,)
     ep_id[1:] = ep_id[:-1]
-    ep_lens = np.unique(ep_id, return_counts= True)[1]
+    ep_lens = np.unique(ep_id, return_counts= True)[1] # shape: (num_episodes,)
     assert len(set(ep_lens)) == 1, "All episodes need to have the same length."
-    ep_len = ep_lens[0].item()
+    ep_len = ep_lens[0].item() # length of each episode
 
     subtraj_min_steps = finetune_kwargs.get('min_steps', 10) # subgoals that are at least this many steps away from the start
     start_threshold   = finetune_kwargs.get('mc_similarity_threshold', 1.0) # distance threshold for start matches
@@ -126,8 +131,8 @@ def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to
             state_to_goal_dist = jnp.array(state_to_goal_dist_np) # Convert back to JAX array
     # --- End NaN Handling ---
 
-    mask = np.zeros_like(ep_id)
-    _obs = _obs.reshape(-1, ep_len, _obs.shape[-1])
+    mask = np.zeros_like(ep_id)  # shape: (total_data_size,)
+    _obs = _obs.reshape(-1, ep_len, _obs.shape[-1]) # shape: (num_episodes, ep_len, obs_dim)
 
     # Select subtrajectories that start close to the current state
     # Relevance criterion
@@ -160,8 +165,13 @@ def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to
 
     else:
         # Original maze logic
-        # obs is 1D, _obs_reshaped is (num_episodes, ep_len, feature_dim)
+        # obs is current state (first two dimensions are x and y coordinates)
+        # we compute the distance between the current state and all states in the dataset
+        # and take the ones that are less than the threshold
+        # Shape of start_matches: (num_episodes, ep_len)
         start_matches = jnp.sqrt(jnp.sum((_obs[..., :2] - obs[:2])**2, axis=-1)) < start_threshold
+
+        # TODO: ask marco when this is used
         if finetune_kwargs['relevance_by_value']:
             assert start_to_state_dist is not None, 'Distance from current obs to all states is needed.'
 
@@ -175,10 +185,21 @@ def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to
     # Optimality criterion
     if state_to_goal_dist is not None:
         # Shift start_matches to align with the subtrajectory minimum steps
-        shift_start_matches = np.zeros_like(start_matches)
+        shift_start_matches = np.zeros_like(start_matches) # shape: (num_episodes, ep_len)
+        # For each episode, the first subtraj_min_steps steps are set to 0
+        # and the rest are set to the start_matches of the previous steps
+        # NOTE: what if is there a match of start state within the last subtraj_min_steps steps?
+        # Answer: we want only to select subtrajectories whose length is at least subtraj_min_steps
+        # So for the steps 1, 2, ..., subtraj_min_steps-1, we set the start_matches to 0
+        # While for the rest we set the start_matches to the start_matches the step which is subtraj_min_steps steps ago
+
+        # Logic: if state at position t matches start, then subtraj starts at t
+        # and t+subtraj_min_steps is a valid end position (because the start matches)
+        # so shift_start_matches semantic is "is this end position such that the start matches?"
         shift_start_matches[:, subtraj_min_steps:] = start_matches[:, :-subtraj_min_steps]
 
-        #
+        # mask that is True for all positions after the first match of each episode
+        # So if there is
         scores = ((shift_start_matches.cumsum(-1) > 0) * state_to_goal_dist.reshape(start_matches.shape))
         scores = np.where(scores==0, scores.max(), scores)
 
@@ -196,10 +217,11 @@ def filter_by_recursive_mdp(dataset, agent, obs, goal, finetune_kwargs, state_to
 
         mask = mask.reshape(-1, ep_len)
         mask[ep_idxs] = 1.
-        mask *= (start_matches.cumsum(-1) > 0)  # only keep from matches
-        col_indices = np.arange(ep_len)
+        mask *= (start_matches.cumsum(-1) > 0)  # only keep from matches until the end
+        col_indices = np.arange(ep_len) # [0, 1, 2, ..., ep_len-1]
+        # discard best point and all points after it TODO: ask marco why this??
         mask *= col_indices[None] < scores.argmin(-1)[..., None]  # discard after best point
-        #return mask.flatten()
+        # for each ep, count selected steps and take maximum
         max_len = mask.sum(-1).max()
         return mask.flatten(), max_len
 
@@ -637,23 +659,27 @@ class GCDataset:
                     del v1, v2, v
                 else:
                     # Compute value of the each state with respect to the goal
+                    # _obs[_sli:_ce] has shape (batch_size, obs_dim)
+                    # goal.reshape(1, -1).repeat(_ce - _sli, 0) has shape (batch_size, goal_dim)
+                    # agent.network.select('value') has shape (batch_size,)
                     self.values.append(agent.network.select('value')(_obs[_sli:_ce], goal.reshape(1, -1).repeat(_ce - _sli, 0), params=agent.network.params))
                     # Compute value of the each state with respect to the start state
                     self.start_values.append(agent.network.select('value')(_obs[_sli:_ce], obs.reshape(1, -1).repeat(_ce - _sli, 0), params=agent.network.params))
 
+            # self.values has shape (total_data_size,)
             self.values = jnp.concatenate(self.values, 0)
             self.start_values = jnp.concatenate(self.start_values, 0)
 
-            # log(1 + _values / 100 ) / log(0.99)
+            # TODO: ask marco, still unclear
+            # V = -1 (1 + gamma + gamma^2 + ... + gamma^(d-1)) = -1 * (1 - gamma^d) / (1 - gamma)
+            # If solving for d, we get d = log(1 + V / (1 - gamma)) / log(gamma)
+            # shape of result: (total_data_size,)
             state_to_goal_dist = (jnp.log((self.values/(1/(1 - 0.99)) + 1)) / jnp.log(0.99))
-            # log(1 + _start_values / 100 ) / log(0.99)
             start_to_state_dist = (jnp.log((self.start_values/(1/(1 - 0.99)) + 1)) / jnp.log(0.99))
 
             value_timer_end = time.time()
             # TODO: restore if needed for debugging
             # print(f"[Timing] Value computation took {value_timer_end - value_timer_start:.4f} seconds")
-
-            #td_filter = filter_by_recursive_mdp(self.dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist, start_to_state_dist)
             td_filter, max_len = filter_by_recursive_mdp(self.dataset, agent, obs, goal, finetune_kwargs, state_to_goal_dist, start_to_state_dist,
                                                          self.start_values, self.values)
             _filter = _filter * td_filter

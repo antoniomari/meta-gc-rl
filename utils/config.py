@@ -42,6 +42,7 @@ class FinetuneConfig:
         replan_horizon: Horizon for replanning during fine-tuning.
         actor_only: If True, only update actor during training (not critic/value).
         no_optimality: If True, disable optimality filtering.
+        recursive_selected_num_points: Number of episodes to select for recursive MDP filtering.
     """
 
     ratio: float = 0.5
@@ -68,6 +69,7 @@ class FinetuneConfig:
     replan_horizon: int = 100
     actor_only: bool = False
     no_optimality: bool = False
+    recursive_selected_num_points: int = 10
 
     def __getitem__(self, key):
         """Make the config subscriptable like a dictionary."""

@@ -834,6 +834,11 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
     ):
         plot_dict = {}  # Initialize plot_dict for each iteration
 
+        # Save agent at the beginning of the iteration to avoid skipping saving when
+        # The loop enters a "continue" branch.
+        if i % cfg.save_interval == 0:
+            save_agent(agent, checkpoint_save_path(cfg, group_name), i)
+
         # Pretraining
         if cfg.use_random_batch:
 
@@ -1054,12 +1059,10 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
                     num_ttt_steps=num_ttt_steps)
 
         # Create plot.
-        if (i - 1) % plot_interval == 0:
+        if (i - 1) % plot_interval == 0 and not cfg.use_random_batch:
             plot_test_loss_inner_steps(plot_dict, i, cfg)
 
-        # Save agent.
-        if i % cfg.save_interval == 0:
-            save_agent(agent, checkpoint_save_path(cfg, group_name), i)
+
 
     train_logger.close()
     eval_logger.close()
