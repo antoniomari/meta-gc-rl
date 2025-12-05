@@ -25,3 +25,45 @@ The hyperparameter settings used:
 
 Big hyperparam sweep.
 We want to assess the performance of our algorithms on TEST-Goals settings first and then on ALL-Goals
+
+
+
+Many fine-tining (i don't remember what)
+
+Finetune (pointmaze) :
+- lr 0.003 and ilr (0.0003 or 3e-05)
+- Canceled -> not good
+
+Eval: baseline antmaze with bigger inner-lr
+- 5e-04, 1e-03, 3e-03 (to see if it matches fomaml boost at 100-200)
+- Completed
+
+Eval: (antmaze) evaluating bigger LR modes at 45k, 50k
+- 1 or 5-inner-steps, ilr0.003 and ilr 0.03
+- Both only actor and normal eval
+- Trained REPTILE -> now training FOMAML (FFA)
+
+Train: (pointmaze) trying higher learning rates as the differences are too subtle for these
+- lr 0.0003 and ilr 0.003 -> Done
+
+
+Training: (humanoidmaze)
+- lr 3e-04, ilr 3e-04
+- FFA, RRAFIX and JTA (inner steps 1 5 10 20 50 100 200)
+
+
+[IN progress]
+
+Eval (antmaze) higher learning rates FFA
+- 1 or 5-inner-steps, ilr0.003 and ilr 0.03
+
+Eval (humanoidmaze)
+- all models with lr 0.0003
+
+Eval: (pointmaze) higher learning rates FFA RRAFIX JTA
+
+Eval: (pointmaze) higher learning rates baseline
+
+[TODO]
+
+Eval: (pointmaze) trying same lr (3e-04) actor only to see if something changes

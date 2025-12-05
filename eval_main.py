@@ -61,6 +61,10 @@ Examples:
                         help='Override number of evaluation episodes per task')
     parser.add_argument('--reset_after_horizon', action='store_true',
                         help='Override finetune.reset_after_horizon to True')
+    parser.add_argument('--finetune_lr', type=float, default=None,
+                        help='Override learning rates (agent.inner_lr, agent.lr, finetune.lr, finetune.inner_lr)')
+    parser.add_argument('--finetune_actor_only', action='store_true',
+                        help='Override finetune.actor_only to True (only update actor during finetuning)')
     parser.add_argument('--verbose', action='store_true',
                         help='Enable verbose output')
 
@@ -546,6 +550,10 @@ if __name__ == "__main__":
     # Load base configuration
     cfg = load_config(os.path.join(os.path.dirname(args.restore_path), "config.yaml"))
 
+    # Restore the default settings for evaluation
+    cfg.finetune.no_optimality = False
+    cfg.finetune.recursive_selected_num_points = 10
+
     # Apply command line overrides
     cfg.restore_path = args.restore_path
     cfg.restore_epoch = args.restore_epoch
@@ -562,6 +570,15 @@ if __name__ == "__main__":
     if args.reset_after_horizon:
         cfg.finetune.reset_after_horizon = True
 
+    if args.finetune_lr is not None:
+        cfg.agent["inner_lr"] = args.finetune_lr
+        cfg.agent["lr"] = args.finetune_lr
+        cfg.finetune.lr = args.finetune_lr
+        cfg.finetune.inner_lr = args.finetune_lr
+
+    if args.finetune_actor_only:
+        cfg.finetune.actor_only = True
+
     print(f"Configuration:")
     print(f"  Restore path: {cfg.restore_path}")
     print(f"  Restore epoch: {cfg.restore_epoch}")
@@ -571,6 +588,10 @@ if __name__ == "__main__":
     print(f"  Reset after horizon: {cfg.finetune.reset_after_horizon}")
     if args.num_ttt_steps is not None:
         print(f"  Overriding TTT steps: {args.num_ttt_steps}")
+    if args.finetune_lr is not None:
+        print(f"  Overriding finetune LR: {args.finetune_lr}")
+    if args.finetune_actor_only:
+        print(f"  Overriding finetune actor_only: True")
 
     main(cfg, args)
 

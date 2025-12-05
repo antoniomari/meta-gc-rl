@@ -292,7 +292,7 @@ class MetaTrainState(flax.struct.PyTreeNode):
 
 
         if reset_opt:
-            opt_state = self.inner_opt.init(params)
+            opt_state = self.inner_opt.init(self.params)
         else:
             opt_state = self.inner_opt_state
 
@@ -542,6 +542,40 @@ class MetaTrainState(flax.struct.PyTreeNode):
                 inner_updates_list=inner_updates_list,
                 **kwargs,
             )
+
+    def distillation_update(
+        self,
+        loss_fn,
+        **kwargs,
+    ):
+
+        # gradients are self.updated_params_list[1] - self.updated_params_list[0]
+        # Compute gradient loss w.r.t self.updated_params_list[1]
+        grads, train_info = jax.grad(loss_fn, has_aux=True)(self.updated_params_list[1])
+        meta_grads_structure = {
+            'params': grads,
+            'learning_rate_multiplier': jnp.array(0.0)
+        }
+        # Prepare current values structure
+        current_values = {
+            'params': self.params,
+            'learning_rate_multiplier': self.learning_rate_multiplier
+        }
+        updates_structure, new_meta_opt_state = self.meta_opt.update(meta_grads_structure, self.meta_opt_state, current_values)
+        updated_params = optax.apply_updates(self.params, updates_structure['params'])
+        # Reset parameters list
+        updated_params_list, test_loss_grads, inner_updates_list = self.init_updated_params_list(updated_params)
+
+        return self.replace(
+            step=self.step + 1,
+            params=updated_params,
+            updated_params_list=updated_params_list,
+            test_loss_grads=test_loss_grads,
+            inner_updates_list=inner_updates_list,
+            meta_opt_state=new_meta_opt_state,
+            **kwargs,
+        )
+
 
     def __call__(self, *args, params=None, method=None, **kwargs):
         assert params is not None, "params must be provided"

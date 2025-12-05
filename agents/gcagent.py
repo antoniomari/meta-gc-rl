@@ -157,3 +157,21 @@ class MetaGCAgent(flax.struct.PyTreeNode):
         new_network = self.network.meta_update(use_model_merging=use_model_merging, use_meta_optimizer=use_meta_optimizer, annealing=annealing)
         return self.replace(network=new_network)
 
+
+    @functools.partial(jax.jit, static_argnames=("use_meta_optimizer", "annealing"))
+    def distillation_update(self, use_meta_optimizer=False, annealing=False):
+
+        # Create loss function ||theta[i] - self.network.params||^2
+
+        def loss_fn(grad_params):
+            # grad_params and self.network.updated_params_list[0] are pytrees
+            # Compute mean squared difference for each parameter tensor (scalar per tensor)
+            mean_squared_diffs = jax.tree_util.tree_map(lambda a, b: jnp.mean(jnp.square(a - b)), grad_params, self.network.updated_params_list[0])
+            # Average all the per-parameter scalars
+            leaves = jax.tree_util.tree_leaves(mean_squared_diffs)
+            loss = jnp.mean(jnp.stack(leaves))
+            info = {"distillation_loss": loss}
+            return loss, info
+
+        new_network = self.network.distillation_update(loss_fn=loss_fn)
+        return self.replace(network=new_network)

@@ -128,7 +128,7 @@ class GCTTTConfig:
     video_frame_skip: int = 3
     eval_on_cpu: int = 1
     training_fix_actor_goal: float = 1.0
-    plot_interval: int = 100  # Interval for creating plots during training
+    plot_interval: int = 1000  # Interval for creating plots during training
     use_meta_optimizer: bool = False  # Whether to use meta optimizer (only for reptile)
     annealing: bool = False  # Whether to use annealing (only for reptile)
 

@@ -223,6 +223,11 @@ def gc_ttt_critic(
     finetune_stats = defaultdict(list)
     info = None
 
+    if finetune_config.num_steps > 0:
+        state_to_goal_dist = train_dataset.prepare_values(agent, goal, finetune_config)
+        old_train_state = copy.deepcopy(agent.network)
+
+
     done = False
     step = 0
     aggregated_filters = []
@@ -235,29 +240,16 @@ def gc_ttt_critic(
 
     # Define how many steps to execute between replanning phases. K in the paper.
     replan_horizon: int = finetune_config.get("replan_horizon", 100)
-
     # Define how many steps to finetune
     num_steps: int = num_ttt_steps if num_ttt_steps is not None else finetune_config.get("num_steps", 0)
 
     # Replanning loop: repeatedly fine-tune and execute a short horizon.
     agent_ft = None
     while not done:
-        # working copy for finetuning
-        # if agent_ft is not None:
-            # check if parameters are equal
-            # using jax.tree_util.tree_all
-            #print("Before cloning: ",
-            #    jax.tree_util.tree_all(jax.tree_map(lambda x, y: jnp.array_equal(x, y), agent.network.params, agent_ft.network.params))
-            #)
         agent_ft = clone_agent(agent)
-        #print("After cloning: ",
-        #    jax.tree_util.tree_all(jax.tree_map(lambda x, y: jnp.array_equal(x, y), agent.network.params, agent_ft.network.params))
-        #)
-
-        # New finetuning config?
         finetune_stats = defaultdict(list)
 
-
+        # TODO: get rid of this
         if finetune_config.get("cube_env", False):
             # A way to detect CubeEnv, or use env.spec.id
             # env._num_cubes should be available if 'env' is an instance of your CubeEnv
@@ -271,14 +263,15 @@ def gc_ttt_critic(
             )
 
         # Filtering the dataset for active test-time fine-tuning.
-
         filter_start_time = time.time()
+
         _filter, max_len = train_dataset.prepare_active_sample(
             agent,
             observation,
             goal,
+            config.env_name,
             finetune_config,
-            log_filter=False,
+            state_to_goal_dist=state_to_goal_dist
         )
         filter_end_time = time.time()
         # print(f"[Timing] Filtering dataset for active test-time fine-tuning took {filter_end_time - filter_start_time:.4f} seconds")
@@ -295,12 +288,17 @@ def gc_ttt_critic(
                     goal,
                     finetune_config.get("ratio", 1.0),
                     finetune_config.get("fix_actor_goal", 1.0),
-                    finetune_kwargs=finetune_config,
+                    hierarchical=(agent.config['agent_name'] == 'saw')
                 )
 
                 # Update the agent with the sampled batch.
                 # Note: in the original code (as here) the optimizer is never reset, consider using reset_inner_opt=i==0
-                agent_ft, update_info = agent_ft.update(batch, finetuning=True, reset_inner_opt=False)
+                agent_ft, update_info = agent_ft.update(
+                    batch,
+                    finetuning=True,
+                    reset_inner_opt=False,
+                    actor_only=finetune_config.get("actor_only", False)
+                )
                 add_to(finetune_stats, flatten(update_info))
 
             # Log the filter after fine-tuning, also show the cuurent state of the agent as red
@@ -461,16 +459,16 @@ def gc_ttt_critic_free(
             # Sample a batch from the dataset using the filter.
             # The batch will contain only the samples that match the filter.
             batch = train_dataset.active_sample(
-                _cfg_get(finetune_config, "batch_size"),
+                finetune_config.get("batch_size", 1024),
                 _filter,
                 goal,
-                _cfg_get(finetune_config, "ratio"),
-                _cfg_get(finetune_config, "fix_actor_goal"),
-                finetune_kwargs=current_finetune_config,
+                finetune_config.get("ratio", 1.0),
+                finetune_config.get("fix_actor_goal", 1.0),
+                hierarchical=(agent.config['agent_name'] == 'saw')
             )
             # Update the agent with the sampled batch.
             # Note: in the original code (as here) the optimizer is never reset, consider using reset_inner_opt=i==0
-            agent, info = agent.update(batch, finetuning=True, reset_inner_opt=False)
+            agent, info = agent.update(batch, finetuning=True, reset_inner_opt=False, actor_only=finetune_config.get("actor_only", False))
             add_to(finetune_stats, flatten(info))
         print(f"time for finetuning {num_steps} steps", time.time() - t_finetune_start)
 
@@ -574,9 +572,6 @@ def evaluate(
         # Debug print: uncomment if needed
         # print(f"Start state: {start_state} and goal: {goal}")
 
-        # Prepare filter
-        _filter = train_dataset.prepare_active_sample(agent, start_state, goal, config.finetune, log_filter=False)[0]
-
         # Simple script to plot critic and policy output in a 2D environment
         # We sample a batch from the training dataset, then calculate both values and actions on sampled batch
         # Plotting values and actions before fine-tuning
@@ -586,11 +581,11 @@ def evaluate(
             # make_plots(train_dataset, agent, goal, "pre", _cfg_get(finetune_config, "saw", False))
             pass
 
-        recursive_mdp = config.finetune.get("filter_by_recursive_mdp", False)
+        ttt_with_critic = config.finetune.get("filter_by_recursive_mdp", False)
 
-        if recursive_mdp:
-            # Default GC-TTT (with critic)
-            # - recursive_mdp = True
+        # Default GC-TTT (with critic) ->  needs filter_by_recursive_mdp = True
+        if ttt_with_critic:
+
             traj, info, finetune_stats, render = gc_ttt_critic(
                 train_dataset,
                 agent_ft,
@@ -602,7 +597,11 @@ def evaluate(
                 should_render=should_render,
                 num_ttt_steps=num_ttt_steps
             )
-        else:
+        else: # GC-TTT without critic ->  needs filter_by_mc = True
+            # Prepare filter
+            state_to_goal_dist = train_dataset.prepare_values(agent, goal, config.finetune)
+            _filter = train_dataset.prepare_active_sample(agent, start_state, goal, env_name=config.env_name, finetune_kwargs=config.finetune, state_to_goal_dist=state_to_goal_dist)[0]
+
             traj, info, finetune_stats, render = gc_ttt_critic_free(
                 train_dataset,
                 agent_ft,

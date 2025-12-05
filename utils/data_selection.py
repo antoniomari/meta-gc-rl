@@ -4,6 +4,7 @@ from utils.datasets import GCDataset
 from utils.evaluation import _cfg_get
 from typing import List, Tuple, Optional, Any, TypedDict
 from agents.gcagent import GCAgent
+from utils.config import FinetuneConfig
 
 class DataSelectionCache:
     def __init__(self, cache_max_size=100):
@@ -54,14 +55,18 @@ class DataSelectionCache:
             self.size += 1
 
 
-def get_batch_filters(train_dataset: GCDataset, agent: GCAgent, start_states, goals, finetune_config, mc_quantile: Optional[float] = None) -> List[Tuple[np.ndarray, int]]:
+def get_batch_filters(train_dataset: GCDataset, agent: GCAgent, start_states, goals, config: GCTTTConfig) -> List[Tuple[np.ndarray, int]]:
     """
     Get batch filters for each task.
     Returns a list of (filter, max_len) tuples for each (start_state, goal) pair.
     """
     # [(filt, max_len), ...]
+
+    assert len(goals) == 1, "Only one goal is supported for now"
+    state_to_goal_dists = train_dataset.prepare_values(agent, goals[0], finetune_config)
+
     return [
-        train_dataset.prepare_active_sample(agent, s, g, finetune_config, log_filter=False, mc_quantile=mc_quantile)
+        train_dataset.prepare_active_sample(agent, s, g, env_name=config.env_name, finetune_kwargs=config.finetune, state_to_goal_dist=state_to_goal_dists)
         for s, g in zip(start_states, goals)
     ]
 
@@ -125,7 +130,7 @@ def fetch_meta_batch(
                 goal,
                 _cfg_get(finetune_config, "ratio"),
                 fix_actor_goal if fix_actor_goal is not None else _cfg_get(finetune_config, "fix_actor_goal"),
-                finetune_kwargs=finetune_config,
+                hierarchical=(agent.config['agent_name'] == 'saw'),
                 return_indices=True,
             )
 
@@ -171,6 +176,8 @@ def sample_start_goal_pairs(
     env: gym.Env,
     meta_batch_size: int,
     train_on_test_goal: bool,
+    is_stitch_dataset: bool = False,
+    finetune_config: FinetuneConfig = None,
 ):
     """
     Sample start and goal pairs from the dataset.
@@ -185,10 +192,16 @@ def sample_start_goal_pairs(
 
         for task_id in task_ids:
             obs, info = env.reset(options=dict(task_id=task_id, render_goal=False))
-            start_states.append(obs)
             goals.append(info.get("goal"))
+            if not is_stitch_dataset:
+                start_states.append(obs)
+
+        if is_stitch_dataset:
+            start_batch, _ = fetch_random_batch(train_dataset, finetune_config, batch_size=2*meta_batch_size)
+            start_states.extend(start_batch['observations'])
+
     else:
-        start_batch, goal_batch = fetch_random_batch(train_dataset, cfg.finetune, batch_size=2 * meta_batch_size)
+        start_batch, goal_batch = fetch_random_batch(train_dataset, finetune_config, batch_size=2 * meta_batch_size)
         start_states.extend(start_batch['observations'])
         goals.extend(goal_batch['next_observations'])
 
