@@ -1,0 +1,62 @@
+run_group: debug
+seed: 0
+env_name: humanoidmaze-medium-stitch-v0
+data_ratio: 1.0
+working_dir: exp/humanoidmaze_stitch/iql_bc
+restore_path: null
+restore_epoch: null
+
+agent:
+  agent_name: gciql
+  actor_loss: bc
+  actor_p_randomgoal: 0.5 # 0.5
+  actor_p_trajgoal: 0.5 # 0.5
+  alpha: 0.1
+  meta_batch_size: 1
+  inner_loop_steps: 1
+  discount: 0.995
+
+meta_algorithm: null  # Options: maml, fomaml, reptile
+train_on_test_goal: false  # Whether to use test goal for training batch fetching
+
+# Hyperparameters specific to test-time fine-tuning
+finetune:
+  ratio: 1.0           # ratio of fine-tuning data to be selected actively
+  num_steps: 50        # number of fine-tunining gradient steps per episode
+  num_steps_list: [0, 10, 20, 50, 100, 200]
+  lr: 3.e-4            # fine-tuning learning rate
+  actor_loss: bc     # overrides agent.actor_loss for fine-tuning
+  alpha: 0.1          # overrides agent.alpha for fine-tuning
+  batch_size: 1024     # fine-tuning batch size
+  fix_actor_goal: 1.0  # how often the actor goal should be set to the evaluation goal
+  mc_quantile: 0.2     # quantile for filtering "good" demonstrations
+  mc_quantile_train: null  # quantile for training data selection (if null, uses mc_quantile)
+  mc_slack: 5          # padding for selected trajectories
+  sorb_len: 10         # number of subgoals for off-policy GCFT
+  filter_by_mc: false  # enables on-policy GCFT
+  filter_by_td: false  # enables off-policy GCFT
+  relevance_by_value: false  # replaces the reward-based relevance criterion with a value-based one
+  saw: false
+  reset_after_horizon: false  # resets the agent after the replan horizon is reached
+  mc_similarity_threshold: 1.0  # added
+  filter_by_recursive_mdp: true  # added
+  min_steps: 10 # added
+  replan_horizon: 100 # or 200 (added)  K in the paper
+  no_optimality: false  # For no-optimality selection
+  recursive_selected_num_points: 10 # Default value
+
+train_steps: 50000
+log_interval: 10
+eval_interval: 50000
+save_interval: 100000
+eval_start: 300000
+test_batch_fraction: 0.2  # During meta-pretraining, use 20% of the filtered data for test_batch
+average_test_gradients: False
+
+eval_tasks: null
+eval_episodes: 50
+eval_temperature: 0
+eval_gaussian: null
+video_episodes: 0
+video_frame_skip: 3
+eval_on_cpu: 0

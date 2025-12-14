@@ -204,6 +204,12 @@ class MetaTrainState(flax.struct.PyTreeNode):
     merging_eps: float = nonpytree_field()
     learning_rate_multiplier: Any  # Learnable scalar that multiplies the inner learning rate
 
+    # Save best updated model for each task
+    best_updated_params_list: Any  # PyTree: list of best updated parameter PyTrees, fixed size [meta_batch_size]
+    best_test_loss_grads: Any      # PyTree: list of best test gradient PyTrees, fixed size [meta_batch_size]
+    best_test_loss: Any # Array of shape  [meta_batch_size]
+
+
     @classmethod
     def make_pytree_list(cls, example, n):
             return [jax.tree_util.tree_map(lambda x: x.copy() if hasattr(x, "copy") else jnp.array(x), example) for _ in range(n)]
@@ -213,7 +219,10 @@ class MetaTrainState(flax.struct.PyTreeNode):
         updated_params_list = self.make_pytree_list(params, self.meta_batch_size)
         test_loss_grads = self.make_pytree_list(jax.tree_util.tree_map(jnp.zeros_like, params), self.meta_batch_size)
         inner_updates_list = self.make_pytree_list(jax.tree_util.tree_map(jnp.zeros_like, params), self.meta_batch_size)
-        return updated_params_list, test_loss_grads, inner_updates_list
+        best_updated_params_list = self.make_pytree_list(params, self.meta_batch_size)
+        best_test_loss_grads = self.make_pytree_list(jax.tree_util.tree_map(jnp.zeros_like, params), self.meta_batch_size)
+        best_test_loss = [jnp.array(jnp.inf) for _ in range(self.meta_batch_size)]
+        return updated_params_list, test_loss_grads, inner_updates_list, best_updated_params_list, best_test_loss_grads, best_test_loss
 
     @classmethod
     def create(cls, model_def, params, inner_opt=None, meta_opt=None, meta_batch_size=1, max_training_steps=100000, merging_eps=1.0, **kwargs):
@@ -241,6 +250,10 @@ class MetaTrainState(flax.struct.PyTreeNode):
         updated_params_list = cls.make_pytree_list(params, meta_batch_size)
         test_loss_grads = cls.make_pytree_list(jax.tree_util.tree_map(jnp.zeros_like, params), meta_batch_size)
         inner_updates_list = cls.make_pytree_list(jax.tree_util.tree_map(jnp.zeros_like, params), meta_batch_size)
+        # Same but for best updated model and test loss gradients
+        best_updated_params_list = cls.make_pytree_list(params, meta_batch_size)
+        best_test_loss_grads = cls.make_pytree_list(jax.tree_util.tree_map(jnp.zeros_like, params), meta_batch_size)
+        best_test_loss = [jnp.array(jnp.inf) for _ in range(meta_batch_size)]
 
         return cls(
             step=1,
@@ -258,6 +271,9 @@ class MetaTrainState(flax.struct.PyTreeNode):
             max_training_steps=max_training_steps,
             merging_eps=merging_eps,
             learning_rate_multiplier=learning_rate_multiplier,
+            best_updated_params_list=best_updated_params_list,
+            best_test_loss_grads=best_test_loss_grads,
+            best_test_loss=best_test_loss,
             **kwargs,
         )
 
@@ -322,7 +338,7 @@ class MetaTrainState(flax.struct.PyTreeNode):
                 'grad/norm': final_grad_norm,
             }
 
-    def add_task_adaptation_result(self, updated_params, test_loss_grads, final_opt_state, i, inner_updates=None, average_test_gradients=False, inner_step=None):
+    def add_task_adaptation_result(self, updated_params, pre_test_grads, test_loss_grads, final_opt_state, i, inner_updates=None, average_test_gradients=False, inner_step=None, info=None):
         self.updated_params_list[i] = updated_params
         if test_loss_grads is not None:
             if average_test_gradients and inner_step is not None and inner_step >= 0:
@@ -343,16 +359,36 @@ class MetaTrainState(flax.struct.PyTreeNode):
         if inner_updates is not None:
             self.inner_updates_list[i] = inner_updates
 
+        if info is not None and info.get('test/total_loss', None) is not None:
+
+            # Only for the first step, check pre-test loss and gradient
+            if inner_step == 0:
+                pre_test_loss = info['pre_test/total_loss']
+                if pre_test_loss < self.best_test_loss[i]:
+                    info["best_test_loss_step"] = 0
+                    self.best_test_loss[i] = pre_test_loss
+                    self.best_test_loss_grads[i] = pre_test_grads
+                    self.best_updated_params_list[i] = jax.tree_util.tree_map(lambda x: x.copy() if hasattr(x, "copy") else jnp.array(x), self.params) # Copy
+
+            # For all steps, check test loss and gradients
+            test_loss = info['test/total_loss']
+            if test_loss < self.best_test_loss[i]:
+                info["best_test_loss_step"] = inner_step
+                self.best_test_loss[i] = test_loss
+                self.best_test_loss_grads[i] = test_loss_grads
+                self.best_updated_params_list[i] = jax.tree_util.tree_map(lambda x: x.copy() if hasattr(x, "copy") else jnp.array(x), updated_params) # Copy
+
         return self.replace(inner_opt_state=final_opt_state)
 
     def inner_update(self,
-        loss_fn,
-        test_loss_fn=None,
-        is_fomaml=False,
+        total_loss_fn,
+        train_batch,
         params=None,
         reset_inner_opt=False,
         test_loss_pre_update=False,
         debug_print: Optional[str] = None,
+        actor_only=False,
+        rng=None,
     ):
         """
         Perform a single step of inner-loop optimization for meta-learning.
@@ -360,8 +396,6 @@ class MetaTrainState(flax.struct.PyTreeNode):
         Args:
             loss_fn (Callable): Loss function for training, takes parameters as input and returns (loss, info).
             test_loss_fn (Callable, optional): Loss function for testing. Used to compute test-time gradients.
-            is_fomaml (bool, optional): If True, computes gradients for FOMAML by differentiating test_loss_fn w.r.t. updated params.
-                                         If False (MAML), differentiates test_loss_fn(updated_params) w.r.t. original params. Default: False.
             params (PyTree, optional): Initial parameters to optimize. If None, uses self.params.
             reset_inner_opt (bool, optional): If True, re-initializes the optimizer state. Default: False.
 
@@ -372,21 +406,18 @@ class MetaTrainState(flax.struct.PyTreeNode):
             info (dict): Information dictionary from the loss function (may be from training or testing).
         """
 
+        # loss_fn is partial of total loss giving step_rng
+        def loss_fn(grad_params):
+            return total_loss_fn(
+                train_batch,
+                grad_params=grad_params,
+                rng=rng,
+                fixed_params=params,
+                actor_only=actor_only,
+            )
+
+
         info = {}
-        # 1. Test loss pre-update
-        if test_loss_fn is not None:
-            if debug_print == "pre":
-                jax.debug.print("Computing test loss pre-update")
-
-            # FOMAML: grad of test_loss_fn w.r.t. updated_params
-            test_grads, test_info_pre = jax.grad(test_loss_fn, has_aux=True)(params)
-            test_info_pre.update(self.compute_grad_stats(test_grads))
-            info.update({f"pre_test/{k}": v for k, v in test_info_pre.items()})
-
-            if debug_print == "pre":
-                jax.debug.print('Test info: {}', info['actor/actor_loss'])
-
-
 
         # 1. Peform 1 steps of inner-loop optimization, train the model on the train_batch
         if reset_inner_opt:
@@ -406,22 +437,10 @@ class MetaTrainState(flax.struct.PyTreeNode):
         updates = jax.tree_util.tree_map(lambda u: u * self.learning_rate_multiplier, updates)
         updated_params = optax.apply_updates(params, updates)
 
-        # 2. Compute test gradients using updated_params
-        test_grads = None
-        if test_loss_fn is not None:
-            if debug_print == "post":
-                jax.debug.print("Computing test loss post-update")
-            # FOMAML: grad of test_loss_fn w.r.t. updated_params
-            test_grads, test_info_post = jax.grad(test_loss_fn, has_aux=True)(updated_params)
-            test_info_post.update(self.compute_grad_stats(test_grads))
-            info.update({f"test/{k}": v for k, v in test_info_post.items()})
+        return updated_params, new_inner_opt_state, info, unscaled_updates
 
-            if debug_print == "post":
-                jax.debug.print(f'Test info post-update: {info}')
 
-        return updated_params, test_grads, new_inner_opt_state, info, unscaled_updates
-
-    def meta_update(self, use_model_merging=False, eps=None, use_meta_optimizer=False, annealing=False, **kwargs):
+    def meta_update(self, use_model_merging=False, eps=None, use_meta_optimizer=False, annealing=False, use_best_checkpoint=False,**kwargs):
         """
         Perform a meta-update using the list of updated parameters.
         If use_model_merging is True, perform a model merge update:
@@ -434,12 +453,16 @@ class MetaTrainState(flax.struct.PyTreeNode):
         if not self.updated_params_list:
             raise ValueError("No updated parameters to perform meta-update.")
 
-        mean_updated_params = jax.tree_util.tree_map(
-            lambda *ps: jnp.stack(ps).mean(axis=0), *self.updated_params_list
-        )
-
         # Anneal merging_eps linearly from 1.0 to 0 over max_training_steps
         if use_model_merging:
+            if use_best_checkpoint:
+                mean_updated_params = jax.tree_util.tree_map(
+                    lambda *ps: jnp.stack(ps).mean(axis=0), *self.best_updated_params_list
+                )
+            else:
+                mean_updated_params = jax.tree_util.tree_map(
+                    lambda *ps: jnp.stack(ps).mean(axis=0), *self.updated_params_list
+                )
             if eps is None:
                 # Compute annealed merging_eps
                 if annealing:
@@ -477,7 +500,7 @@ class MetaTrainState(flax.struct.PyTreeNode):
                 )
                 new_meta_opt_state = self.meta_opt_state
 
-            updated_params_list, test_loss_grads, inner_updates_list = self.init_updated_params_list(merged_params)
+            updated_params_list, test_loss_grads, inner_updates_list, best_updated_params_list, best_test_loss_grads, best_test_loss = self.init_updated_params_list(merged_params)
 
             return self.replace(
                 step=self.step + 1,
@@ -485,30 +508,43 @@ class MetaTrainState(flax.struct.PyTreeNode):
                 updated_params_list=updated_params_list,
                 test_loss_grads=test_loss_grads,
                 inner_updates_list=inner_updates_list,
+                best_updated_params_list=best_updated_params_list,
+                best_test_loss_grads=best_test_loss_grads,
+                best_test_loss=best_test_loss,
                 meta_opt_state=new_meta_opt_state,
                 **kwargs,
             )
         else:
             # Compute meta-gradient as the average of test_loss_grads
-            meta_grads = jax.tree_util.tree_map(
-                lambda *gs: jnp.stack(gs).mean(axis=0), *self.test_loss_grads
-            )
+            if use_best_checkpoint:
+                meta_grads = jax.tree_util.tree_map(
+                    lambda *gs: jnp.stack(gs).mean(axis=0), *self.best_test_loss_grads
+                )
+            else:
+                meta_grads = jax.tree_util.tree_map(
+                    lambda *gs: jnp.stack(gs).mean(axis=0), *self.test_loss_grads
+                )
 
             # Compute gradient w.r.t. learning_rate_multiplier
             # dL_test/d(lr_mult) = sum over params of (test_loss_grads * unscaled_updates)
             # since updated_params = params + lr_mult * unscaled_updates
-            lr_mult_grads = []
-            for test_grads, inner_updates in zip(self.test_loss_grads, self.inner_updates_list):
-                # Compute dot product between test_grads and inner_updates for each task
-                dot_product = jax.tree_util.tree_reduce(
-                    lambda x, y: x + y,
-                    jax.tree_util.tree_map(lambda g, u: jnp.sum(g * u), test_grads, inner_updates),
-                    initializer=0.0
-                )
-                lr_mult_grads.append(dot_product)
+            # TODO: I disable inner-lr update for now, we can add it back later -> due to ease of use and implementation
+            update_inner_lr = False
+            if update_inner_lr:
+                lr_mult_grads = []
+                for test_grads, inner_updates in zip(self.test_loss_grads, self.inner_updates_list):
+                    # Compute dot product between test_grads and inner_updates for each task
+                    dot_product = jax.tree_util.tree_reduce(
+                        lambda x, y: x + y,
+                        jax.tree_util.tree_map(lambda g, u: jnp.sum(g * u), test_grads, inner_updates),
+                        initializer=0.0
+                    )
+                    lr_mult_grads.append(dot_product)
 
-            # Average gradient across tasks
-            lr_mult_grad = jnp.mean(jnp.array(lr_mult_grads))
+                # Average gradient across tasks
+                lr_mult_grad = jnp.mean(jnp.array(lr_mult_grads))
+            else:
+                lr_mult_grad = jnp.array(0.0)
 
             # Prepare meta gradients structure with both params and learning_rate_multiplier
             meta_grads_structure = {
@@ -528,7 +564,7 @@ class MetaTrainState(flax.struct.PyTreeNode):
             # For scalar learning_rate_multiplier, apply update manually
             new_learning_rate_multiplier = self.learning_rate_multiplier + updates_structure['learning_rate_multiplier']
 
-            updated_params_list, test_loss_grads, inner_updates_list = self.init_updated_params_list(new_params)
+            updated_params_list, test_loss_grads, inner_updates_list, best_updated_params_list, best_test_loss_grads, best_test_loss = self.init_updated_params_list(new_params)
 
 
             jax.debug.print('New learning rate multiplier: {}', new_learning_rate_multiplier)
@@ -540,6 +576,9 @@ class MetaTrainState(flax.struct.PyTreeNode):
                 updated_params_list=updated_params_list,
                 test_loss_grads=test_loss_grads,
                 inner_updates_list=inner_updates_list,
+                best_updated_params_list=best_updated_params_list,
+                best_test_loss_grads=best_test_loss_grads,
+                best_test_loss=best_test_loss,
                 **kwargs,
             )
 
@@ -564,7 +603,7 @@ class MetaTrainState(flax.struct.PyTreeNode):
         updates_structure, new_meta_opt_state = self.meta_opt.update(meta_grads_structure, self.meta_opt_state, current_values)
         updated_params = optax.apply_updates(self.params, updates_structure['params'])
         # Reset parameters list
-        updated_params_list, test_loss_grads, inner_updates_list = self.init_updated_params_list(updated_params)
+        updated_params_list, test_loss_grads, inner_updates_list, best_updated_params_list, best_test_loss_grads, best_test_loss = self.init_updated_params_list(updated_params)
 
         return self.replace(
             step=self.step + 1,
@@ -572,6 +611,9 @@ class MetaTrainState(flax.struct.PyTreeNode):
             updated_params_list=updated_params_list,
             test_loss_grads=test_loss_grads,
             inner_updates_list=inner_updates_list,
+            best_updated_params_list=best_updated_params_list,
+            best_test_loss_grads=best_test_loss_grads,
+            best_test_loss=best_test_loss,
             meta_opt_state=new_meta_opt_state,
             **kwargs,
         )
@@ -650,12 +692,15 @@ def restore_agent(agent, restore_path, restore_epoch):
             )
         )
         # Setup updated_params_list and test_loss_grads
-        updated_params_list, test_loss_grads, inner_updates_list = agent.network.init_updated_params_list(agent.network.params)
+        updated_params_list, test_loss_grads, inner_updates_list, best_updated_params_list, best_test_loss_grads, best_test_loss = agent.network.init_updated_params_list(agent.network.params)
         agent = agent.replace(
             network=agent.network.replace(
                 updated_params_list=updated_params_list,
                 test_loss_grads=test_loss_grads,
                 inner_updates_list=inner_updates_list,
+                best_updated_params_list=best_updated_params_list,
+                best_test_loss_grads=best_test_loss_grads,
+                best_test_loss=best_test_loss,
             )
         )
     else:

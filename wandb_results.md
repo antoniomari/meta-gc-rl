@@ -67,3 +67,31 @@ Eval: (pointmaze) higher learning rates baseline
 [TODO]
 
 Eval: (pointmaze) trying same lr (3e-04) actor only to see if something changes
+
+
+
+
+Antmaze Runs ongoing:
+[BC]
+- bc RRAB    eps=(0.05 0.1 0.2) -> with lr 1e-03 (should be the best one working here)
+- bc RRAB    eps=(0.05 0.1 0.2 0.5 1.0) with lr 3e-04
+- bc RRB     eps=(0.05 0.1 0.2 0.5 1.0) with lr 3e-04
+
+[DDPGBC]
+- RRB  eps=(0.05, 0.1, 0.2, 0.5, 1.0)
+- RRAB eps=(0.05, 0.1, 0.2, 0.5, 1.0)
+
+
+Humanoidmaze Runs ongoing:
+[DDPGBC]
+- RRB  eps=(0.05, 0.15, 1.0)
+- RRAB eps=(0.05, 0.15, 1.0)
+
+
+
+TODO
+
+Evaluate RRA for humanoidmaze
+
+
+Pointmaze BC

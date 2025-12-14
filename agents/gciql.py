@@ -142,7 +142,17 @@ class GCIQLAgent(MetaGCAgent):
             dist = self.network.select('actor')(batch['observations'], batch['actor_goals'], params=grad_params)
             log_prob = dist.log_prob(batch['actions'])
 
+            # NOTE: temporary code
+            # Add L2 regularizer to the actor loss
+            """
+            l2_reg = 0.0
+            for p in jax.tree_leaves(grad_params):
+                l2_reg += jnp.sum(p ** 2)
+            l2_weight =  0 # 1e-05
+            actor_loss = -log_prob.mean() + l2_weight * l2_reg  # Original  actor_loss = -log_prob.mean()
+            """
             actor_loss = -log_prob.mean()
+
 
             actor_info = {
                 'actor_loss': actor_loss,
@@ -224,29 +234,27 @@ class GCIQLAgent(MetaGCAgent):
 
         return self.replace(network=new_network, rng=new_rng), info
 
-    @functools.partial(jax.jit, static_argnames=("is_fomaml", "reset_inner_opt", "params_idx", "debug_print", "actor_only"))
+    @functools.partial(jax.jit, static_argnames=("reset_inner_opt", "params_idx", "actor_only"))
     def get_inner_update_result(
         self,
         train_batch,
-        test_batch: Optional[dict] = None,
-        is_fomaml: bool = True,
-        reset_inner_opt: bool = False,
         params_idx: int = 0,
-        debug_print: Optional[str] = None,
+        reset_inner_opt: bool = False,
         actor_only: bool = False,
+        rng=None,
     ):
         # This is an override, call the parent class's get_inner_update_result
         # The class should be exactly MetaGCAgent, so we can call the parent class's get_inner_update_result
         initial_params = self.network.updated_params_list[params_idx]
-        updated_params, test_grads, final_opt_state, info, unscaled_updates  = super().get_inner_update_result(train_batch, test_batch, is_fomaml, reset_inner_opt, params_idx, debug_print, actor_only)
+        updated_params, final_opt_state, info, unscaled_updates, new_rng = super().get_inner_update_result(train_batch, params_idx, reset_inner_opt, actor_only, rng)
         # Perform target update here
         # TODO: check for case of actor_only
         self.target_update(initial_params, updated_params, 'critic')
-        return updated_params, test_grads, final_opt_state, info, unscaled_updates
+        return updated_params, final_opt_state, info, unscaled_updates, new_rng
 
-    @functools.partial(jax.jit, static_argnames=("use_model_merging", "use_meta_optimizer", "annealing"))
-    def meta_update(self, use_model_merging=False, use_meta_optimizer=False, annealing=False):
-        new_network = self.network.meta_update(use_model_merging=use_model_merging, use_meta_optimizer=use_meta_optimizer, annealing=annealing)
+    @functools.partial(jax.jit, static_argnames=("use_model_merging", "use_meta_optimizer", "annealing", "use_best_checkpoint"))
+    def meta_update(self, use_model_merging=False, use_meta_optimizer=False, annealing=False, use_best_checkpoint=False):
+        new_network = self.network.meta_update(use_model_merging=use_model_merging, use_meta_optimizer=use_meta_optimizer, annealing=annealing, use_best_checkpoint=use_best_checkpoint)
         # USE TARGET UPDATE HERE instead of in inner-update
         # TODO: check for case of actor_only
         self.target_update(self.network.params, new_network.params, 'critic')

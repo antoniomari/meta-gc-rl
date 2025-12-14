@@ -4,7 +4,7 @@ from utils.datasets import GCDataset
 from utils.evaluation import _cfg_get
 from typing import List, Tuple, Optional, Any, TypedDict
 from agents.gcagent import GCAgent
-from utils.config import FinetuneConfig
+from utils.config import FinetuneConfig, GCTTTConfig
 
 class DataSelectionCache:
     def __init__(self, cache_max_size=100):
@@ -63,7 +63,7 @@ def get_batch_filters(train_dataset: GCDataset, agent: GCAgent, start_states, go
     # [(filt, max_len), ...]
 
     assert len(goals) == 1, "Only one goal is supported for now"
-    state_to_goal_dists = train_dataset.prepare_values(agent, goals[0], finetune_config)
+    state_to_goal_dists = train_dataset.prepare_values(agent, goals[0], config.finetune)
 
     return [
         train_dataset.prepare_active_sample(agent, s, g, env_name=config.env_name, finetune_kwargs=config.finetune, state_to_goal_dist=state_to_goal_dists)
@@ -74,6 +74,7 @@ def get_batch_filters(train_dataset: GCDataset, agent: GCAgent, start_states, go
 def fetch_meta_batch(
     train_dataset: 'GCDataset',
     goal: Any,
+    agent: GCAgent,
     finetune_config: dict,
     filter_and_max_len: tuple,
     meta_batch_size: Optional[int] = None,
@@ -128,8 +129,8 @@ def fetch_meta_batch(
                 batch_size,
                 filt_used,
                 goal,
-                _cfg_get(finetune_config, "ratio"),
-                fix_actor_goal if fix_actor_goal is not None else _cfg_get(finetune_config, "fix_actor_goal"),
+                ratio=1.0,
+                fix_actor_goal=fix_actor_goal if fix_actor_goal is not None else _cfg_get(finetune_config, "fix_actor_goal"),
                 hierarchical=(agent.config['agent_name'] == 'saw'),
                 return_indices=True,
             )

@@ -131,6 +131,7 @@ class GCTTTConfig:
     plot_interval: int = 1000  # Interval for creating plots during training
     use_meta_optimizer: bool = False  # Whether to use meta optimizer (only for reptile)
     annealing: bool = False  # Whether to use annealing (only for reptile)
+    use_best_checkpoint: bool = False  # Whether to use best checkpoint
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "GCTTTConfig":
@@ -165,6 +166,7 @@ class GCTTTConfig:
             plot_interval=int(data.get("plot_interval", cls.plot_interval)),
             use_meta_optimizer=bool(data.get("use_meta_optimizer", cls.use_meta_optimizer)),
             annealing=bool(data.get("annealing", cls.annealing)),
+            use_best_checkpoint=bool(data.get("use_best_checkpoint", cls.use_best_checkpoint)),
         )
 
 

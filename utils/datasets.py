@@ -85,6 +85,7 @@ def extract_cube_positions_from_full_obs(observation_array, proprio_dim, num_cub
 
 def compute_reward(obs, goal, env_name, is_goal=True):
     if 'maze' in env_name:
+        # Shape results: (num_episodes, ep_len)
         return jnp.sqrt(jnp.sum((obs[..., :2] - goal[:2]) ** 2, axis=-1)) < 1.0
     elif 'cube-single' in env_name:
         # revert obs transformation
@@ -130,7 +131,7 @@ def filter_by_td(dataset, obs, env_name, state_to_goal_dist, agent, finetune_kwa
     ep_len = ep_lens[0].item() # length of each episode
 
     subtraj_min_steps = finetune_kwargs.get('min_steps', 10) # subgoals that are at least this many steps away from the start
-    start_threshold   = finetune_kwargs.get('mc_similarity_threshold', 1.0) # distance threshold for start matches
+    sim_threshold = finetune_kwargs.get('mc_similarity_threshold', 1.0) # distance threshold for start matches
     num_selected_points  = finetune_kwargs.get('recursive_selected_num_points', 10) # number of subgoals to select
     non_optimality = finetune_kwargs.get('no_optimality', False) # if true we only sample transitions close to the state regardless of whether they are any good
     non_relevance = finetune_kwargs.get('no_relevance', False) # if true we sample transitions from the buffer that are good under the optimality criterion but may be from anywhere over the state space (not necessarily close to our agents state)
@@ -138,32 +139,20 @@ def filter_by_td(dataset, obs, env_name, state_to_goal_dist, agent, finetune_kwa
     visual_env = finetune_kwargs.get('visual_env', False) # if true we use visual env logic for selecting subgoals
     fixed_horizon = finetune_kwargs.get('fixed_horizon', False)
 
-    # TODO: Ask marco about nan handling here
-    # TODO: remove
-    # --- Start NaN Handling ---
-    if state_to_goal_dist is not None:
-        state_to_goal_dist_np = np.array(state_to_goal_dist) # Convert to NumPy for handling
-        nan_mask = np.isnan(state_to_goal_dist_np)
-        num_nans = nan_mask.sum()
-        if num_nans > 0:
-            # Choose a large value (effectively infinity for practical purposes)
-            large_value = np.finfo(state_to_goal_dist_np.dtype).max / 2
-            state_to_goal_dist_np[nan_mask] = large_value
-            state_to_goal_dist = jnp.array(state_to_goal_dist_np) # Convert back to JAX array
-    # --- End NaN Handling ---
+    # Check nan, if there are raise Error
+    if np.isnan(state_to_goal_dist).sum() > 0:
+        raise ValueError("state_to_goal_dist contains nans")
 
     mask = np.zeros_like(ep_id)  # shape: (total_data_size,)
 
     # Select subtrajectories that start close to the current state
-    sim_threshold = finetune_kwargs['similarity_threshold']
     if finetune_kwargs['relevance_by_value']:
-
         # Compute starting values now
         _start_values = []
         batch_size = 400_000 # TODO: Ask marco # old: 10000
         for i in range((len(_obs) // batch_size) + 1):
             _sli, _ce = i*batch_size, min((i+1)*batch_size, len(_obs))
-            _start_value = agent.network.select('value')(_obs[_sli:_ce], obs[None].repeat(_ce-_sli, 0))
+            _start_value = agent.network.select('value')(_obs[_sli:_ce], obs[None].repeat(_ce-_sli, 0), params=agent.network.params)
             # handle twin critics
             _start_value = ((_start_value[0] + _start_value[1]) / 2) if len(_start_value) == 2 else _start_value
             _start_values.append(_start_value)
@@ -172,9 +161,9 @@ def filter_by_td(dataset, obs, env_name, state_to_goal_dist, agent, finetune_kwa
         start_to_state_dist = (jnp.log((_start_values/(1/(1 - 0.99)) + 1)) / jnp.log(0.99))
         start_matches = (start_to_state_dist < sim_threshold).reshape(-1, ep_len)
     else:
-        _obs = _obs.reshape(-1, ep_len, _obs.shape[-1])
+        _obs = _obs.reshape(-1, ep_len, _obs.shape[-1]) # Shape: (num_episodes, ep_len, obs_dim)
         start_matches = compute_reward(_obs, obs, env_name)
-    if finetune_kwargs['no_relevance']:
+    if non_relevance:
         # shuffle start matches, i.e. match states randomly
         np.random.shuffle(start_matches)
 
@@ -193,6 +182,8 @@ def filter_by_td(dataset, obs, env_name, state_to_goal_dist, agent, finetune_kwa
     # and t+subtraj_min_steps is a valid end position (because the start matches)
     # so shift_start_matches semantic is "is this end position such that the start matches?"
     subtraj_min_steps = finetune_kwargs["min_steps"]
+
+    # The first 10 will not match, the 11-th match if the 1st is relevant and so on
     shift_start_matches[:, subtraj_min_steps:] = start_matches[:, :-subtraj_min_steps]
 
     if fixed_horizon:
@@ -216,10 +207,24 @@ def filter_by_td(dataset, obs, env_name, state_to_goal_dist, agent, finetune_kwa
 
     mask = mask.reshape(-1, ep_len)
     mask[ep_idxs] = 1.
-    mask *= (start_matches.cumsum(-1) > 0)  # only keep from matches until the end
+
+    if finetune_kwargs.get('latest_starting_state', False):
+        # Take last state that matches the start
+        # Take cumsum and then set to 0 those not equal to the max
+        # NOTE: I actually want to get the closest one, so start from latest - offset
+        cumsum = start_matches.cumsum(-1)
+        max_cumsum = cumsum.max(-1)
+        mask_last_start = (cumsum == max_cumsum[:, None])
+        mask_start = mask_last_start
+    elif finetune_kwargs.get('start_from_first', False):
+        mask_start = np.ones_like(mask)
+    else:
+        mask_start = start_matches.cumsum(-1) > 0
+
+    mask *= mask_start  # only keep from matches until the end
     col_indices = np.arange(ep_len) # [0, 1, 2, ..., ep_len-1]
     # discard best point and all points after it TODO: ask marco why this??
-    mask *= col_indices[None] < scores.argmin(-1)[..., None]  # discard after best point
+    mask *= col_indices[None] <= scores.argmin(-1)[..., None]  # discard after best point
     # for each ep, count selected steps and take maximum
     max_len = mask.sum(-1).max()
     return mask.flatten(), max_len
@@ -572,35 +577,36 @@ class GCDataset:
             return {k: np.concatenate([uniform_batch[k], active_batch[k]]) for k in uniform_batch}
 
 
-    def prepare_values(self, agent, goal, finetune_kwargs):
-        if not finetune_kwargs['filter_by_td']:
+    def prepare_values(self, agent, goal, finetune_kwargs, return_values=False):
+
+        if not finetune_kwargs['filter_by_recursive_mdp']: # Note: marco changed into `filter_by_td`
             return None
         _obs = self.dataset['observations']
         _values = []
         batch_size = 400_000 # TODO: Ask marco # old: 10000
         for i in range((len(_obs) // batch_size) + 1):
             _sli, _ce = i*batch_size, min((i+1)*batch_size, len(_obs))
-            _value = agent.network.select('value')(_obs[_sli:_ce], goal[None].repeat(_ce-_sli, 0))
+            _value = agent.network.select('value')(_obs[_sli:_ce], goal[None].repeat(_ce-_sli, 0), params=agent.network.params)
             # handle twin critics
             _value = ((_value[0] + _value[1]) / 2) if len(_value) == 2 else _value
             _values.append(_value)
         _values = jnp.concatenate(_values, 0)
-
         # Convert values to distances
-         state_to_goal_dist = (jnp.log((_values/(1/(1 - 0.99)) + 1)) / jnp.log(0.99))
-        return state_to_goal_dist
+        discount = agent.config['discount']
+        state_to_goal_dist = (jnp.log((_values/(1/(1 - discount)) + 1)) / jnp.log(discount))
+
+        if return_values:
+            return state_to_goal_dist, _values
+        else:
+            return state_to_goal_dist
 
     # NOTE: batch size here is useless
     #def prepare_active_sample(self, agent, obs, goal, finetune_kwargs, batch_size=2048, exp_name = None,
     #                          log_filter=True, mc_quantile: Optional[float] = None):
     def prepare_active_sample(self, agent, obs, goal, env_name, finetune_kwargs, state_to_goal_dist=None):
 
-        # NOTE: mc_quantile is the quantile of the Monte-Carlo returns to use for filtering. If None, it is set to the value in finetune_kwargs.
-
         _obs = self.dataset['observations']
         _filter = jnp.ones_like(self.dataset['terminals'])
-        if mc_quantile is None:
-            mc_quantile = finetune_kwargs['mc_quantile']
 
         mc_slack = finetune_kwargs['mc_slack']
         mc_similarity_threshold = finetune_kwargs['mc_similarity_threshold']
@@ -631,7 +637,8 @@ class GCDataset:
         # - trajectory passes close to current goal (in terms of reward)
         # In another version, we use 'filter_by_td' instead of 'filter_by_recursive_mdp'
         elif finetune_kwargs.get('filter_by_recursive_mdp', False):
-            td_filter, max_len = self.filter_by_td(self.dataset, obs, env_name, state_to_goal_dist, agent, finetune_kwargs)
+            assert state_to_goal_dist is not None, "state_to_goal_dist must be provided for recursive Value-based optimality scoring"
+            td_filter, max_len = filter_by_td(self.dataset, obs, env_name, state_to_goal_dist, agent, finetune_kwargs)
             _filter = _filter * td_filter
 
         return _filter, max_len

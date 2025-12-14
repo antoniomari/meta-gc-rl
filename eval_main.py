@@ -65,6 +65,10 @@ Examples:
                         help='Override learning rates (agent.inner_lr, agent.lr, finetune.lr, finetune.inner_lr)')
     parser.add_argument('--finetune_actor_only', action='store_true',
                         help='Override finetune.actor_only to True (only update actor during finetuning)')
+    parser.add_argument('--finetune_actor_loss', type=str, default=None,
+                        help='Override agent.actor_loss with cfg.finetune.actor_loss (if set in config) or provided value')
+    parser.add_argument('--num_trajectories', type=int, default=None,
+                        help='Override cfg.finetune.recursive_selected_num_points')
     parser.add_argument('--verbose', action='store_true',
                         help='Enable verbose output')
 
@@ -578,6 +582,13 @@ if __name__ == "__main__":
 
     if args.finetune_actor_only:
         cfg.finetune.actor_only = True
+
+    if args.finetune_actor_loss is not None:
+        cfg.finetune.actor_loss = args.finetune_actor_loss
+        cfg.agent['actor_loss'] = args.finetune_actor_loss
+
+    if args.num_trajectories is not None:
+        cfg.finetune.recursive_selected_num_points = args.num_trajectories
 
     print(f"Configuration:")
     print(f"  Restore path: {cfg.restore_path}")
