@@ -36,7 +36,7 @@ from utils.evaluation import evaluate, _cfg_get
 from utils.flax_utils import restore_agent, save_agent
 from utils.log_utils import CsvLogger, get_wandb_video, setup_wandb, get_exp_name
 from datetime import datetime
-from utils.data_selection import get_batch_filters, fetch_meta_batch, sample_start_goal_pairs
+from utils.data_selection import get_task_filter, fetch_meta_batch, sample_task
 from utils.config import GCTTTConfig, load_config
 from agents.gcagent import GCAgent, MetaGCAgent
 import matplotlib.pyplot as plt
@@ -190,41 +190,6 @@ Examples:
                         help='Override both cfg.finetune.actor_loss and cfg.agent["actor_loss"]')
 
     return parser.parse_args()
-
-
-# META Learning methods to run: standard maml, FOMAML, Reptile
-
-
-def fetch_random_batch(
-    train_dataset: GCDataset,
-    finetune_config,
-    batch_size: int = None
-):
-    """
-    Fetch a random batch from the dataset using dataset.sample function.
-
-    Args:
-        train_dataset: The training dataset
-        finetune_config: Fine-tuning configuration
-        batch_size: Batch size for sampling. If None, uses finetune_config.batch_size
-
-    Returns:
-        A tuple of (train_batch, test_batch) where both are random samples from the dataset
-    """
-    if batch_size is None:
-        batch_size = _cfg_get(finetune_config, "batch_size")
-
-    # Sample random batch from dataset
-    random_batch = train_dataset.sample(batch_size)
-
-    # Split into train and test batches (half each)
-    train_size = batch_size // 2
-    test_size = batch_size - train_size
-
-    train_batch = {k: v[:train_size] for k, v in random_batch.items()}
-    test_batch = {k: v[train_size:train_size + test_size] for k, v in random_batch.items()}
-
-    return (train_batch, test_batch)
 
 
 def evaluation_loop(
@@ -532,7 +497,7 @@ def checkpoint_save_path(cfg: GCTTTConfig, wandb_group: str):
 
 def plot_test_loss_inner_steps(plot_dict: dict, step: int, cfg: GCTTTConfig):
     """
-    Create plots of test losses vs inner steps and log them to wandb.
+    Create plots of train and test losses vs inner steps and log them to wandb.
 
     Args:
         plot_dict: Dictionary where keys are inner_step (int) and values are batch_info dicts
@@ -544,80 +509,137 @@ def plot_test_loss_inner_steps(plot_dict: dict, step: int, cfg: GCTTTConfig):
     """
     if not plot_dict:
         raise ValueError(f"[Plot] plot_dict is empty at step {step}, skipping plot creation")
-        return
 
     # Extract inner steps and sort them
     inner_steps = sorted([k for k in plot_dict.keys() if isinstance(k, int)])
     if not inner_steps:
         raise ValueError(f"[Plot] No valid inner steps found in plot_dict at step {step}, skipping plot creation")
-        return
 
     print(f"[Plot] Creating plots at step {step} with inner_steps: {inner_steps}")
 
-    # Extract the metrics for each inner step
+    # Extract the metrics for each inner step (both train and test)
     metrics_to_plot = {
-        "training/test/total_loss": "test/total_loss",
-        "training/test/value/value_loss": "test/value/value_loss",
-        "training/test/critic/critic_loss": "test/critic/critic_loss",
-        "training/test/actor/actor_loss": "test/actor/actor_loss",
+        "total_loss": {
+            "train": "train/total_loss",
+            "test": "test/total_loss"
+        },
+        "value/value_loss": {
+            "train": "train/value/value_loss",
+            "test": "test/value/value_loss"
+        },
+        "critic/critic_loss": {
+            "train": "train/critic/critic_loss",
+            "test": "test/critic/critic_loss"
+        },
+        "actor/actor_loss": {
+            "train": "train/actor/actor_loss",
+            "test": "test/actor/actor_loss"
+        },
     }
 
     # Try alternative key names if the primary ones don't exist
     alt_keys = {
+        "train/total_loss": ["train/total_loss", "total_loss"],
         "test/total_loss": ["test/total_loss"],
-        "test/value/value_loss": ["test/value/value_loss", "value/value_loss"],
-        "test/critic/critic_loss": ["test/critic/critic_loss", "critic/critic_loss"],
-        "test/actor/actor_loss": ["test/actor/actor_loss", "actor/actor_loss"],
+        "train/value/value_loss": ["train/value/value_loss", "value/value_loss"],
+        "test/value/value_loss": ["test/value/value_loss"],
+        "train/critic/critic_loss": ["train/critic/critic_loss", "critic/critic_loss"],
+        "test/critic/critic_loss": ["test/critic/critic_loss"],
+        "train/actor/actor_loss": ["train/actor/actor_loss", "actor/actor_loss"],
+        "test/actor/actor_loss": ["test/actor/actor_loss"],
     }
 
-    # Collect data for each metric
+    # Collect data for each metric (both train and test)
     plot_data = {}
-    for wandb_key, base_key in metrics_to_plot.items():
-        values = []
+    for metric_name, keys in metrics_to_plot.items():
+        train_values = []
+        test_values = []
         valid_steps = []
 
         for inner_step in inner_steps:
             batch_info = plot_dict[inner_step]
-            value = None
+            train_value = None
+            test_value = None
 
-            # Try primary key
-            if base_key in batch_info:
-                value = batch_info[base_key]
+            # Try to get train value
+            train_key = keys["train"]
+            if train_key in batch_info:
+                train_value = batch_info[train_key]
             else:
                 # Try alternative keys
-                for alt_key in alt_keys.get(base_key, []):
+                for alt_key in alt_keys.get(train_key, []):
                     if alt_key in batch_info:
-                        value = batch_info[alt_key]
+                        train_value = batch_info[alt_key]
                         break
 
-            if value is not None:
-                # Convert to float if needed
-                if hasattr(value, 'item'):
-                    value = float(value.item())
-                else:
-                    value = float(value)
-                values.append(value)
+            # Try to get test value
+            test_key = keys["test"]
+            if test_key in batch_info:
+                test_value = batch_info[test_key]
+            else:
+                # Try alternative keys
+                for alt_key in alt_keys.get(test_key, []):
+                    if alt_key in batch_info:
+                        test_value = batch_info[alt_key]
+                        break
+
+            # Only process if at least one value is available
+            if train_value is not None or test_value is not None:
                 valid_steps.append(inner_step)
 
-        if values:
-            plot_data[wandb_key] = {
+                # Convert to float if needed and store (or None if missing)
+                if train_value is not None:
+                    if hasattr(train_value, 'item'):
+                        train_value = float(train_value.item())
+                    else:
+                        train_value = float(train_value)
+                    train_values.append(train_value)
+                else:
+                    train_values.append(None)
+
+                if test_value is not None:
+                    if hasattr(test_value, 'item'):
+                        test_value = float(test_value.item())
+                    else:
+                        test_value = float(test_value)
+                    test_values.append(test_value)
+                else:
+                    test_values.append(None)
+
+        if train_values or test_values:
+            plot_data[metric_name] = {
                 "inner_steps": valid_steps,
-                "values": values
+                "train_values": train_values,
+                "test_values": test_values
             }
 
     if not plot_data:
         raise ValueError(f"[Plot] No plot data collected at step {step}. Available keys in batch_info: {list(plot_dict[inner_steps[0]].keys()) if inner_steps else 'N/A'}")
 
     # Create plots
-    for wandb_key, data in plot_data.items():
+    for metric_name, data in plot_data.items():
         buf = io.BytesIO()
         fig, ax = plt.subplots(figsize=(10, 6))
 
-        ax.plot(data["inner_steps"], data["values"], marker='o', linewidth=2, markersize=6)
+        # Filter out None values for plotting
+        train_steps = [s for s, v in zip(data["inner_steps"], data["train_values"]) if v is not None]
+        train_vals = [v for v in data["train_values"] if v is not None]
+        test_steps = [s for s, v in zip(data["inner_steps"], data["test_values"]) if v is not None]
+        test_vals = [v for v in data["test_values"] if v is not None]
+
+        # Plot train losses in blue
+        if train_vals:
+            ax.plot(train_steps, train_vals, marker='o', linewidth=2, markersize=6, color='blue', label='Train')
+
+        # Plot test losses in red
+        if test_vals:
+            ax.plot(test_steps, test_vals, marker='s', linewidth=2, markersize=6, color='red', label='Test')
+
         ax.set_xlabel("Inner Step", fontsize=12)
-        ax.set_ylabel(wandb_key.split("/")[-1].replace("_", " ").title(), fontsize=12)
-        ax.set_title(f"{wandb_key} vs Inner Step (Training Step {step})", fontsize=14)
+        ax.set_ylabel(metric_name.split("/")[-1].replace("_", " ").title(), fontsize=12)
+        ax.set_title(f"{metric_name} vs Inner Step (Training Step {step})", fontsize=14)
         ax.grid(True, alpha=0.3)
+        ax.legend()
 
         plt.tight_layout()
         plt.savefig(buf, format="png", dpi=150)
@@ -626,7 +648,7 @@ def plot_test_loss_inner_steps(plot_dict: dict, step: int, cfg: GCTTTConfig):
         img = Image.open(buf)
         img_array = np.array(img)
         # Use plot/ prefix to organize plots in wandb
-        plot_name = "plot/" + wandb_key.replace("/", "_")
+        plot_name = "plot/" + metric_name.replace("/", "_")
         wandb.log({plot_name: wandb.Image(img_array)}, step=step)
         print(f"[Plot] Logged {plot_name} to wandb at step {step}")
         del img_array, img, buf
@@ -647,6 +669,8 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
     # split env_name by '-'
     exp_name = get_exp_name(cfg)
     env_name_short = cfg.env_name.split("-")[0]
+
+    if cfg.env_name.
 
     group_name, exp_name = get_exp_and_group_names(cfg, env_name_short, exp_name)
 
@@ -680,7 +704,7 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
         "train_on_test_goal": cfg.train_on_test_goal,
         "use_random_batch": cfg.use_random_batch,
         "training_fix_actor_goal": cfg.training_fix_actor_goal,
-        "plot_interval": getattr(cfg, "plot_interval", 100),
+        "plot_interval": getattr(cfg, "plot_interval", 1000),
         "use_best_checkpoint": cfg.use_best_checkpoint,
     }
     setup_wandb(
@@ -814,7 +838,6 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
         # Meta-learning aligned
         else:
             update_info = []
-            # plot_dict is already initialized above
             # --- Inner Update (Meta-Learning) ---
             t_inner_start = time.time()
             memory_before_inner = get_memory_usage()
@@ -825,35 +848,33 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
 
                 fetched = False
                 while not fetched:
-                    start_states, goals = sample_start_goal_pairs(train_dataset, env, 1, cfg.train_on_test_goal, is_stitch_dataset="stitch" in cfg.env_name, finetune_config=cfg.finetune)
-                    batch_filters_and_max_lens = get_batch_filters(train_dataset, agent, start_states, goals, cfg)
-                    task_filter = batch_filters_and_max_lens[0][0]
+                    start_state, goal = sample_task(train_dataset, env, test_task=cfg.train_on_test_goal, is_stitch_dataset="stitch" in cfg.env_name)
+                    task_filter, max_len = get_task_filter(train_dataset, agent, start_state, goal, cfg)
                     if task_filter.sum() > 0:
                         fetched = True
 
                 # Sample test batch for the task
                 test_batch, test_batch_idx = fetch_meta_batch(
                     train_dataset,
-                    goals[0],
+                    goal,
                     agent,
                     cfg.finetune,
-                    batch_filters_and_max_lens[0],
+                    (task_filter, max_len),
                     meta_batch_size=128, # NOTE: I fixed this to avoid recompilation
                     fix_actor_goal=cfg.training_fix_actor_goal,
-                    verbose=True
+                    verbose=i%100 == 0
                 )
 
                 for inner_step in range(config_agent.get("inner_loop_steps", 1)):
 
                     train_batch, _ = fetch_meta_batch(
                         train_dataset,
-                        goals[0],
+                        goal,
                         agent,
                         cfg.finetune,
-                        batch_filters_and_max_lens[0],
+                        (task_filter, max_len),
                         exclude=test_batch_idx,
-                        fix_actor_goal=cfg.training_fix_actor_goal,
-                        verbose=inner_step == 0
+                        fix_actor_goal=cfg.training_fix_actor_goal
                     )
 
                     if train_batch is None:
@@ -880,34 +901,38 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
                         # Save batch_info for current inner_step to a dictionary
                         plot_dict[inner_step] = batch_info
 
+
+                    ### [Update information to log] ###
+
                     # Update pre-test info only at the first inner step
                     if inner_step == 0:
                         # take all keys that starts with "training/pre_test" and insert them into update_info_to_append
                         info_task.update({k: batch_info[k] for k in batch_info.keys() if k.startswith("pre_test")})
+                        # Set info_task_lowest_test_loss
                         info_task_lowest_test_loss = batch_info
-                    else:
-                        # Update lowest test loss info
-                        if batch_info['test/actor/actor_loss'] < info_task_lowest_test_loss['test/actor/actor_loss']:
-                            info_task_lowest_test_loss = batch_info
-                        # If last inner step, prepare full info to log
-                        if inner_step == config_agent.get("inner_loop_steps", 1) - 1:
-                            # If cfg.use_best_checkpoint then use such info
-                            if cfg.use_best_checkpoint:
-                                batch_info = info_task_lowest_test_loss
 
-                            # Include all other keys coming to batch_info
-                            info_task.update({k: batch_info[k] for k in batch_info.keys() if not k.startswith("pre_test")})
+                    # Update lowest test loss info
+                    if batch_info['test/actor/actor_loss'] < info_task_lowest_test_loss['test/actor/actor_loss']:
+                        info_task_lowest_test_loss = batch_info
+                    # If last inner step, prepare full info to log
+                    if inner_step == config_agent.get("inner_loop_steps", 1) - 1:
+                        # If cfg.use_best_checkpoint then use such info
+                        if cfg.use_best_checkpoint:
+                            batch_info = info_task_lowest_test_loss
 
-                            # For all metrics with "training/pre_test/{metric_name}", compute "diff/{metric_name}" = "training/pre_test/{metric_name}" - "training/test/{metric_name}"
-                            diff_stats = {}
-                            for k in info_task.keys():
-                                if k.startswith("pre_test/"):
-                                    metric_name = k[len("pre_test/"):]
-                                    diff_stats[f"diff/{metric_name}"] = info_task[f"pre_test/{metric_name}"] - info_task[f"test/{metric_name}"]
+                        # Include all other keys coming to batch_info
+                        info_task.update({k: batch_info[k] for k in batch_info.keys() if not k.startswith("pre_test")})
 
-                            info_task.update(diff_stats)
-                            # Append info batch
-                            update_info.append(info_task)
+                        # For all metrics with "training/pre_test/{metric_name}", compute "diff/{metric_name}" = "training/pre_test/{metric_name}" - "training/test/{metric_name}"
+                        diff_stats = {}
+                        for k in info_task.keys():
+                            if k.startswith("pre_test/"):
+                                metric_name = k[len("pre_test/"):]
+                                diff_stats[f"diff/{metric_name}"] = info_task[f"pre_test/{metric_name}"] - info_task[f"test/{metric_name}"]
+
+                        info_task.update(diff_stats)
+                        # Append info batch
+                        update_info.append(info_task)
 
             t_inner_end = time.time()
             memory_after_inner = get_memory_usage()
@@ -921,27 +946,31 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
                     f"(+{memory_after_inner - memory_before_inner:.2f} MB)"
                 )
             if len(update_info) == 0:
+                print(f"[Warning] No update info found for meta-step {i}")
                 continue
-
             # Average batch info
             update_info = {k: np.mean([info[k] for info in update_info]) for k in update_info[0].keys()}
 
             # --- Meta Update (Meta-Learning) ---
-            if META_LEARNING_ALGORITHM is not None:
-                t_meta_start = time.time()
-                memory_before_meta = get_memory_usage()
-                agent: MetaGCAgent = agent.meta_update(
-                    use_model_merging=META_LEARNING_ALGORITHM == "reptile",
-                    use_meta_optimizer=cfg.use_meta_optimizer,
-                    annealing=cfg.annealing,
-                    use_best_checkpoint=cfg.use_best_checkpoint,
-                )
-                memory_after_meta = get_memory_usage()
-                t_meta_end = time.time()
-                meta_update_time = t_meta_end - t_meta_start
-                if verbose:
-                    print(f"[Timer] Meta update took {meta_update_time:.4f} seconds.")
-                    print(f"[Memory] Before meta: {memory_before_meta:.2f} MB, After meta: {memory_after_meta:.2f} MB (+{memory_after_meta - memory_before_meta:.2f} MB)\n")
+            t_meta_start = time.time()
+            memory_before_meta = get_memory_usage()
+
+            # Joint training does model merging with eps=1.0
+            if META_LEARNING_ALGORITHM is None:
+                assert cfg.agent["merging_eps"] == 1.0
+
+            agent: MetaGCAgent = agent.meta_update(
+                use_model_merging=META_LEARNING_ALGORITHM == "reptile" or META_LEARNING_ALGORITHM is None,
+                use_meta_optimizer=cfg.use_meta_optimizer,
+                annealing=cfg.annealing,
+                use_best_checkpoint=cfg.use_best_checkpoint,
+            )
+            memory_after_meta = get_memory_usage()
+            t_meta_end = time.time()
+            meta_update_time = t_meta_end - t_meta_start
+            if verbose:
+                print(f"[Timer] Meta update took {meta_update_time:.4f} seconds.")
+                print(f"[Memory] Before meta: {memory_before_meta:.2f} MB, After meta: {memory_after_meta:.2f} MB (+{memory_after_meta - memory_before_meta:.2f} MB)\n")
 
             # Clear JAX caches periodically to prevent memory growth
             if i % 100_000 == 0:  # Every 100k iterations
@@ -1123,21 +1152,3 @@ if __name__ == "__main__":
 
     main(cfg, verbose=args.verbose if args.verbose is not None else False, wandb_group=args.wandb_group)
 
-
-"""
-
-Experiment
-IQL - pointmaze-stitch
-SAW - pointmaze-stitch
-
-Fomaml:
-- 1. Train from scratch (10000 steps) and se the values and critic losses.
-- 2. Gradient clipping.
-- 3. Hessian could be the problem.
-- Try GCBC with Fomaml antmaze-expert.
-
-Implicit meta-learning method -> run inner step to convergence (IMAML)
--
-
-
-"""

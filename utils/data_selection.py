@@ -55,27 +55,27 @@ class DataSelectionCache:
             self.size += 1
 
 
-def get_batch_filters(train_dataset: GCDataset, agent: GCAgent, start_states, goals, config: GCTTTConfig) -> List[Tuple[np.ndarray, int]]:
+def get_task_filter(
+    train_dataset: GCDataset,
+    agent: GCAgent,
+    start_state,
+    goal,
+    config: GCTTTConfig
+) -> Tuple[np.ndarray, int]:
     """
     Get batch filters for each task.
-    Returns a list of (filter, max_len) tuples for each (start_state, goal) pair.
+    Returns a tuple: (task_filter, max_len)
     """
-    # [(filt, max_len), ...]
-
-    assert len(goals) == 1, "Only one goal is supported for now"
-    state_to_goal_dists = train_dataset.prepare_values(agent, goals[0], config.finetune)
-
-    return [
-        train_dataset.prepare_active_sample(agent, s, g, env_name=config.env_name, finetune_kwargs=config.finetune, state_to_goal_dist=state_to_goal_dists)
-        for s, g in zip(start_states, goals)
-    ]
+    # It is None if GC-TTT no critic is used
+    state_to_goal_dist = train_dataset.prepare_values(agent, goal, config.finetune)
+    return train_dataset.prepare_active_sample(agent, start_state, goal, env_name=config.env_name, finetune_kwargs=config.finetune, state_to_goal_dist=state_to_goal_dist)
 
 
 def fetch_meta_batch(
     train_dataset: 'GCDataset',
     goal: Any,
     agent: GCAgent,
-    finetune_config: dict,
+    finetune_config: FinetuneConfig,
     filter_and_max_len: tuple,
     meta_batch_size: Optional[int] = None,
     exclude: Optional[List[int]] = None,
@@ -108,7 +108,7 @@ def fetch_meta_batch(
     if meta_batch_size is not None:
         batch_size = meta_batch_size
     else:
-        batch_size = int(finetune_config.get("batch_size"))
+        batch_size = int(finetune_config.batch_size)
 
     filt, _ = filter_and_max_len
 
@@ -130,7 +130,7 @@ def fetch_meta_batch(
                 filt_used,
                 goal,
                 ratio=1.0,
-                fix_actor_goal=fix_actor_goal if fix_actor_goal is not None else _cfg_get(finetune_config, "fix_actor_goal"),
+                fix_actor_goal=fix_actor_goal if fix_actor_goal is not None else finetune_config.fix_actor_goal,
                 hierarchical=(agent.config['agent_name'] == 'saw'),
                 return_indices=True,
             )
@@ -140,70 +140,32 @@ def fetch_meta_batch(
     return (None, None)
 
 
-def fetch_random_batch(
-    train_dataset: GCDataset,
-    finetune_config,
-    batch_size: int = None
-):
-    """
-    Fetch a random batch from the dataset using dataset.sample function.
-
-    Args:
-        train_dataset: The training dataset
-        finetune_config: Fine-tuning configuration
-        batch_size: Batch size for sampling. If None, uses finetune_config.batch_size
-
-    Returns:
-        A tuple of (train_batch, test_batch) where both are random samples from the dataset
-    """
-    if batch_size is None:
-        batch_size = _cfg_get(finetune_config, "batch_size")
-
-    # Sample random batch from dataset
-    random_batch = train_dataset.sample(batch_size)
-
-    # Split into train and test batches (half each)
-    train_size = batch_size // 2
-    test_size = batch_size - train_size
-
-    train_batch = {k: v[:train_size] for k, v in random_batch.items()}
-    test_batch = {k: v[train_size:train_size + test_size] for k, v in random_batch.items()}
-
-    return (train_batch, test_batch)
-
-
-def sample_start_goal_pairs(
+def sample_task(
     train_dataset: GCDataset,
     env: gym.Env,
-    meta_batch_size: int,
-    train_on_test_goal: bool,
+    test_task: bool,
     is_stitch_dataset: bool = False,
-    finetune_config: FinetuneConfig = None,
 ):
     """
-    Sample start and goal pairs from the dataset.
+    Sample a task, represented by a starting state and a goal state.
+    If test_task is True, the goal will be sampled according to the test goals.
+    If stitch_dataset (and test_task) is True, the starting state will be sampled from the dataset, otherwise it matches the test_task starting state.
+    Otherwise, the starting state and goal will be sampled randomly from the dataset.
     """
-    # Sample start states and goals for each task
-    start_states = []
-    goals = []
-
-    if train_on_test_goal:
+    if test_task:
         # 1. Sample task METABATCH_SIZE times
-        task_ids = np.random.randint(1, 6, meta_batch_size)
-
-        for task_id in task_ids:
-            obs, info = env.reset(options=dict(task_id=task_id, render_goal=False))
-            goals.append(info.get("goal"))
-            if not is_stitch_dataset:
-                start_states.append(obs)
+        task_id = np.random.randint(1, 6)
+        obs, info = env.reset(options=dict(task_id=task_id, render_goal=False))
+        goal = info.get("goal")
 
         if is_stitch_dataset:
-            start_batch, _ = fetch_random_batch(train_dataset, finetune_config, batch_size=2*meta_batch_size)
-            start_states.extend(start_batch['observations'])
-
+            # For stitch dataset, we sample a random observation from the dataset
+            start_state = train_dataset.sample(1)['observations'][0]
+        else:
+            # For expert dataset, just use the starting state in the trajectory
+            start_state = obs
     else:
-        start_batch, goal_batch = fetch_random_batch(train_dataset, finetune_config, batch_size=2 * meta_batch_size)
-        start_states.extend(start_batch['observations'])
-        goals.extend(goal_batch['next_observations'])
+        start_state = train_dataset.sample(1)['observations'][0]
+        goal = train_dataset.sample(1)['next_observations'][0]
 
-    return start_states, goals
+    return start_state, goal

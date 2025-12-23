@@ -187,7 +187,6 @@ class MetaTrainState(flax.struct.PyTreeNode):
     To avoid recompilation, updated_params_list and test_loss_grads are fixed-size lists (PyTrees)
     with static shapes, initialized with dummy values. The number of tasks (meta_batch_size) is fixed.
     """
-
     step: int
     apply_fn: Any = nonpytree_field() # apply_fn is the function that applies the model to the input
     model_def: Any = nonpytree_field() # model_def is the model definition
@@ -338,7 +337,18 @@ class MetaTrainState(flax.struct.PyTreeNode):
                 'grad/norm': final_grad_norm,
             }
 
-    def add_task_adaptation_result(self, updated_params, pre_test_grads, test_loss_grads, final_opt_state, i, inner_updates=None, average_test_gradients=False, inner_step=None, info=None):
+    def add_task_adaptation_result(
+        self,
+        updated_params,
+        pre_test_grads,
+        test_loss_grads,
+        final_opt_state,
+        i,
+        inner_updates=None,
+        average_test_gradients=False,
+        inner_step=None,
+        info=None
+    ):
         self.updated_params_list[i] = updated_params
         if test_loss_grads is not None:
             if average_test_gradients and inner_step is not None and inner_step >= 0:
@@ -474,9 +484,6 @@ class MetaTrainState(flax.struct.PyTreeNode):
                     merging_eps = self.merging_eps
             else:
                 merging_eps = eps
-
-            print(f'Merging eps: {merging_eps}')
-
 
             if use_meta_optimizer:
 

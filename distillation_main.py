@@ -35,7 +35,7 @@ from utils.evaluation import evaluate, _cfg_get
 from utils.flax_utils import restore_agent, save_agent
 from utils.log_utils import CsvLogger, get_wandb_video, setup_wandb, get_exp_name
 from datetime import datetime
-from utils.data_selection import get_batch_filters, fetch_meta_batch, fetch_random_batch, sample_start_goal_pairs
+from utils.data_selection import get_task_filter, fetch_meta_batch, fetch_random_batch, sample_start_goal_pairs
 from utils.config import GCTTTConfig, load_config
 from agents.gcagent import GCAgent, MetaGCAgent
 import matplotlib.pyplot as plt
@@ -552,7 +552,7 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
         fetched = False
         while not fetched:
             start_states, goals = sample_start_goal_pairs(train_dataset, env, 1, cfg.train_on_test_goal, is_stitch_dataset="stitch" in cfg.env_name, finetune_config=cfg.finetune)
-            batch_filters_and_max_lens = get_batch_filters(train_dataset, agent, start_states, goals, cfg.finetune, mc_quantile=cfg.finetune.get("mc_quantile_train", None))
+            batch_filters_and_max_lens = get_task_filter(train_dataset, agent, start_states, goals, cfg.finetune, mc_quantile=cfg.finetune.get("mc_quantile_train", None))
             task_filter = batch_filters_and_max_lens[0][0]
             if task_filter.sum() > 0:
                 fetched = True

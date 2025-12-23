@@ -1,6 +1,0 @@
-epoch,restore_path,ttt_steps,task_id,task_name,success,eval_duration,overall_success
-10000,/cluster/home/anmari/gc_ttt/exp/antmaze_stitch/iql_ddpgbc/TEST-antmaze-ddpgbc-PT-mc0.2-lr0.003-ilr0.003/seed0,0,1,task1,0.04,655.3222057819366,0.072
-10000,/cluster/home/anmari/gc_ttt/exp/antmaze_stitch/iql_ddpgbc/TEST-antmaze-ddpgbc-PT-mc0.2-lr0.003-ilr0.003/seed0,0,2,task2,0.02,664.0914397239685,0.072
-10000,/cluster/home/anmari/gc_ttt/exp/antmaze_stitch/iql_ddpgbc/TEST-antmaze-ddpgbc-PT-mc0.2-lr0.003-ilr0.003/seed0,0,3,task3,0.06,649.5777871608734,0.072
-10000,/cluster/home/anmari/gc_ttt/exp/antmaze_stitch/iql_ddpgbc/TEST-antmaze-ddpgbc-PT-mc0.2-lr0.003-ilr0.003/seed0,0,4,task4,0.0,664.0108516216278,0.072
-10000,/cluster/home/anmari/gc_ttt/exp/antmaze_stitch/iql_ddpgbc/TEST-antmaze-ddpgbc-PT-mc0.2-lr0.003-ilr0.003/seed0,0,5,task5,0.24,622.7879996299744,0.072
