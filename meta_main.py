@@ -670,7 +670,9 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
     exp_name = get_exp_name(cfg)
     env_name_short = cfg.env_name.split("-")[0]
 
-    if cfg.env_name.
+    if "navigate" in cfg.env_name:
+        assert "maze" in env_name_short, "Expert environment must contain 'maze' in the name"
+        env_name_short = env_name_short.replace("maze", "_exp")
 
     group_name, exp_name = get_exp_and_group_names(cfg, env_name_short, exp_name)
 
@@ -1025,8 +1027,6 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
         # Create plot.
         if (i - 1) % plot_interval == 0 and not cfg.use_random_batch:
             plot_test_loss_inner_steps(plot_dict, i, cfg)
-
-
 
     train_logger.close()
     eval_logger.close()

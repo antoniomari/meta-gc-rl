@@ -296,7 +296,7 @@ def gc_ttt_critic(
                 agent_ft, update_info = agent_ft.update(
                     batch,
                     finetuning=True,
-                    reset_inner_opt=False,
+                    reset_inner_opt=i==0,
                     actor_only=finetune_config.get("actor_only", False)
                 )
                 add_to(finetune_stats, flatten(update_info))
@@ -468,7 +468,7 @@ def gc_ttt_critic_free(
             )
             # Update the agent with the sampled batch.
             # Note: in the original code (as here) the optimizer is never reset, consider using reset_inner_opt=i==0
-            agent, info = agent.update(batch, finetuning=True, reset_inner_opt=False, actor_only=finetune_config.get("actor_only", False))
+            agent, info = agent.update(batch, finetuning=True, reset_inner_opt=i==0, actor_only=finetune_config.get("actor_only", False))
             add_to(finetune_stats, flatten(info))
         print(f"time for finetuning {num_steps} steps", time.time() - t_finetune_start)
 

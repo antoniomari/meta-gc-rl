@@ -1,4 +1,3 @@
-from typing import Any
 import functools
 import flax
 import jax
@@ -6,10 +5,9 @@ import jax.numpy as jnp
 import ml_collections
 import optax
 from utils.encoders import GCEncoder, encoder_modules
-from utils.flax_utils import ModuleDict, TrainState, MetaTrainState, nonpytree_field
+from utils.flax_utils import ModuleDict, MetaTrainState
 from utils.networks import GCActor, GCDiscreteActor
-from agents.gcagent import GCAgent, MetaGCAgent
-from typing import cast
+from agents.gcagent import MetaGCAgent
 
 class GCBCAgent(MetaGCAgent):
     """Goal-conditioned behavioral cloning (GCBC) agent."""
@@ -69,6 +67,7 @@ class GCBCAgent(MetaGCAgent):
             info[f'actor/{k}'] = v
 
         loss = actor_loss
+        info["total_loss"] = loss
         return loss, info
 
     @functools.partial(jax.jit, static_argnames=("finetuning", "reset_inner_opt", "actor_only"))
