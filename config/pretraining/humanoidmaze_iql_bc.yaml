@@ -32,12 +32,12 @@ finetune:
   mc_slack: 5          # padding for selected trajectories
   sorb_len: 10         # number of subgoals for off-policy GCFT
   filter_by_mc: false  # enables on-policy GCFT
-  filter_by_td: true  # enables off-policy GCFT
+  filter_by_td: false  # enables off-policy GCFT
   relevance_by_value: false  # replaces the reward-based relevance criterion with a value-based one
   saw: false
   reset_after_horizon: false  # resets the agent after the replan horizon is reached
   mc_similarity_threshold: 1.0  # added
-  filter_by_recursive_mdp: false  # added
+  filter_by_recursive_mdp: true  # added
   min_steps: 10 # added
   replan_horizon: 100 # or 200 (added)  K in the paper
   no_optimality: false  # For no-optimality selection

@@ -673,6 +673,9 @@ def main(cfg: GCTTTConfig, verbose: bool = False, wandb_group: str = None):
     if "navigate" in cfg.env_name:
         assert "maze" in env_name_short, "Expert environment must contain 'maze' in the name"
         env_name_short = env_name_short.replace("maze", "_exp")
+    elif "stitch" in cfg.env_name:
+        assert "maze" in env_name_short, "Stitch environment must contain 'maze' in the name"
+        env_name_short = env_name_short.replace("maze", "_sti")
 
     group_name, exp_name = get_exp_and_group_names(cfg, env_name_short, exp_name)
 
