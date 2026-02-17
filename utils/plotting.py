@@ -376,7 +376,7 @@ def get_best_mean_success_and_std(settings: dict, results: dict[int, pd.DataFram
         settings: dict: settings of the group (from parse_group_name)
         results: dict[int, pd.DataFrame]: dict of seed to dataframe of results
     Returns:
-        tuple[float, float]: (max_mean_success, std_at_max)
+        tuple[float, float]: (max_mean_success, ci95_at_max)
     """
     all_steps = sorted(set(np.concatenate([df['step'].values for df in results.values() if not df.empty])))
     if not all_steps:
@@ -395,15 +395,17 @@ def get_best_mean_success_and_std(settings: dict, results: dict[int, pd.DataFram
                 overall_success_matrix[i, j] = step_to_success[step]
 
     mean_success = np.nanmean(overall_success_matrix, axis=0)
-    std_success = np.nanstd(overall_success_matrix, axis=0)
+    n_valid = np.sum(~np.isnan(overall_success_matrix), axis=0)
+    stderr_success = np.nanstd(overall_success_matrix, axis=0) / np.sqrt(np.maximum(n_valid, 1))
+    ci95_success = 1.96 * stderr_success
 
     if np.all(np.isnan(mean_success)):
         raise AssertionError(f"All mean_success are NaN for group: {settings}")
     max_idx = np.nanargmax(mean_success)
     max_mean_success = mean_success[max_idx]
-    std_at_max = std_success[max_idx]
+    ci95_at_max = ci95_success[max_idx]
 
-    return max_mean_success, std_at_max
+    return max_mean_success, ci95_at_max
 
 
 def get_algo_color(group_key):
@@ -444,9 +446,11 @@ def plot_max_overall_success_vs_ttt_steps(
     error_bars: bool = False,
     root_dir: str = "results_eval",
     ax=None,
-    figsize=(8, 5),
+    figsize=(6, 4),
     show=True,
-    print_table: bool = False
+    print_table: bool = False,
+    figure_path: str = None,
+    use_last_checkpoint: bool = False  # TODO: implement this version
 ):
     """
     For all (settings,results) pairs in group_results, plot the maximum of the mean overall_success across steps.
@@ -634,8 +638,8 @@ def plot_max_overall_success_vs_ttt_steps(
                 alpha=0.17,
             )
 
-    ax.set_xlabel('TTT_steps')
-    ax.set_ylabel('Max Mean Overall Success')
+    ax.set_xlabel('TTT steps')
+    ax.set_ylabel('Mean Success Rate')
     if title is not None:
         ax.set_title(title)
     else:
@@ -645,9 +649,23 @@ def plot_max_overall_success_vs_ttt_steps(
         ax.set_xlim(xlim)
     if ylim is not None:
         ax.set_ylim(ylim)
-    ax.legend(fontsize=8)
+    ax.legend(fontsize=14)
     ax.grid(True)
+    # Set fontsize for axis labels
+    ax.xaxis.label.set_size(16)
+    ax.yaxis.label.set_size(16)
+    # Set fontsize for tick labels
+    ax.tick_params(axis='both', which='major', labelsize=16)
+    # Set fontsize for title if present
+    if ax.get_title():
+        ax.title.set_size(16)
 
+
+    # Y axis in log scale
+    if figure_path is not None:
+        os.makedirs(os.path.dirname(figure_path), exist_ok=True)
+        print(f"Saving figure to {figure_path}")
+        plt.savefig(figure_path, bbox_inches='tight')
     if show:
         plt.show()
 

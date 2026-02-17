@@ -1,18 +1,16 @@
 run_group: debug
 seed: 0
-env_name: pointmaze-medium-navigate-v0
+env_name: antmaze-medium-navigate-v0
 data_ratio: 1.0
-working_dir: exp/pointmaze_expert/bc
+working_dir: exp/antmaze_expert/iql_bc
 restore_path: null
 restore_epoch: null
 
 agent:
-  agent_name: gcbc
+  agent_name: gciql
   actor_loss: bc
   meta_batch_size: 1
   inner_loop_steps: 1
-  discount: 0.995
-
 
 meta_algorithm: null  # Options: maml, fomaml, reptile
 train_on_test_goal: false  # Whether to use test goal for training batch fetching
@@ -24,15 +22,15 @@ finetune:
   num_steps_list: [0, 10, 20, 50, 100, 200]
   lr: 3.e-4            # fine-tuning learning rate
   actor_loss: bc     # overrides agent.actor_loss for fine-tuning
-  alpha: 0.003          # overrides agent.alpha for fine-tuning
+  alpha: 0.3          # overrides agent.alpha for fine-tuning
   batch_size: 1024     # fine-tuning batch size
   fix_actor_goal: 1.0  # how often the actor goal should be set to the evaluation goal
   mc_quantile: 0.2     # quantile for filtering "good" demonstrations
   mc_quantile_train: null  # quantile for training data selection (if null, uses mc_quantile)
   mc_slack: 5          # padding for selected trajectories
   sorb_len: 10         # number of subgoals for off-policy GCFT
-  filter_by_mc: true  # enables on-policy GCFT
-  filter_by_td: false  # enables off-policy GCFT
+  filter_by_mc: false  # enables on-policy GCFT
+  filter_by_td: true  # enables off-policy GCFT
   relevance_by_value: false  # replaces the reward-based relevance criterion with a value-based one
   saw: false
   reset_after_horizon: false  # resets the agent after the replan horizon is reached
@@ -43,7 +41,7 @@ finetune:
   no_optimality: false  # For no-optimality selection
   recursive_selected_num_points: 10 # Default value
 
-train_steps: 50000
+train_steps: 500000
 log_interval: 10
 eval_interval: 50000
 save_interval: 100000

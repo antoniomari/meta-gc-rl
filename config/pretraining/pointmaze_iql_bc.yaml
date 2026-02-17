@@ -2,17 +2,15 @@ run_group: debug
 seed: 0
 env_name: pointmaze-medium-navigate-v0
 data_ratio: 1.0
-working_dir: exp/pointmaze_expert/bc
+working_dir: exp/pointmaze_expert/iql_bc
 restore_path: null
 restore_epoch: null
 
 agent:
-  agent_name: gcbc
+  agent_name: gciql
   actor_loss: bc
   meta_batch_size: 1
   inner_loop_steps: 1
-  discount: 0.995
-
 
 meta_algorithm: null  # Options: maml, fomaml, reptile
 train_on_test_goal: false  # Whether to use test goal for training batch fetching
@@ -31,8 +29,8 @@ finetune:
   mc_quantile_train: null  # quantile for training data selection (if null, uses mc_quantile)
   mc_slack: 5          # padding for selected trajectories
   sorb_len: 10         # number of subgoals for off-policy GCFT
-  filter_by_mc: true  # enables on-policy GCFT
-  filter_by_td: false  # enables off-policy GCFT
+  filter_by_mc: false  # enables on-policy GCFT
+  filter_by_td: true  # enables off-policy GCFT
   relevance_by_value: false  # replaces the reward-based relevance criterion with a value-based one
   saw: false
   reset_after_horizon: false  # resets the agent after the replan horizon is reached
