@@ -10,7 +10,6 @@ dist/
 # Ignore directories
 configs/
 logs/
-scripts/
 old/
 analysis/
 analysis_neurips/
