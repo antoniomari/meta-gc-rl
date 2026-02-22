@@ -271,6 +271,7 @@ def plot_mean_success_over_checkpoints(
     new_style: bool = False,
     figsize=(6, 4),
     fontsize: int = 18,
+    figure_path: str = None,
 ):
     """
     Plot the mean and standard deviation of a result metric (e.g., overall_success)
@@ -394,6 +395,12 @@ def plot_mean_success_over_checkpoints(
     if ax.get_title():
         ax.title.set_fontsize(fontsize)
 
+    # Y axis in log scale
+    if figure_path is not None:
+        os.makedirs(os.path.dirname(figure_path), exist_ok=True)
+        print(f"Saving figure to {figure_path}")
+        plt.savefig(figure_path, bbox_inches='tight')
+
     plt.show()
 
 
@@ -433,7 +440,9 @@ def compute_mean_success_and_std_error(
             # Rows are seeds, columns are steps
             for i, seed in enumerate(seed_list):
                 df = filtered_results[filtered_results['seed'] == seed]
-                assert len(df) == 1, f"Expected 1 row for seed {seed} and meta_steps {meta_steps} and ttt_steps {ttt_steps} - {group_label}"
+
+                if not allow_nan:
+                    assert len(df) == 1, f"Expected 1 row for seed {seed} and meta_steps {meta_steps} and ttt_steps {ttt_steps} - {group_label}"
                 overall_success_vector[i] = df[result_col].values[0]
 
             # TODO: print(overall_success_vector)
@@ -533,6 +542,7 @@ def plot_max_overall_success_vs_ttt_steps(
     use_best_auc_up_to: Optional[int] = None, # TODO: implement this version
     fontsize: int = 20,
     show_legend: bool = True,
+    allow_nan: bool = False,
 ):
     """
     For all (settings,results) pairs in group_results, plot the maximum of the mean overall_success across steps.
@@ -568,6 +578,7 @@ def plot_max_overall_success_vs_ttt_steps(
             results_df,
             result_col=result_col,
             group_label=group_label,
+            allow_nan=allow_nan,
         )
 
 

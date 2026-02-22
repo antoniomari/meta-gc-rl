@@ -195,24 +195,18 @@ To evaluate `antmaze_expert/bc` models
 ```bash
 # List all relevant model directories to evaluate
 model_paths=(
-    gc_ttt/exp/antmaze_expert/bc/FT-ALL-ant_exp-bc-FFA-1-1-lr0.0003-ilr0.0003
-    gc_ttt/exp/antmaze_expert/bc/FT-ALL-ant_exp-bc-FFA-1-1-lr0.0003-ilr3e-05
-    gc_ttt/exp/antmaze_expert/bc/FT-ALL-ant_exp-bc-FFA-10-1-lr0.0003-ilr0.0003
-    gc_ttt/exp/antmaze_expert/bc/FT-ALL-ant_exp-bc-FFA-10-1-lr0.0003-ilr3e-05
-    gc_ttt/exp/antmaze_expert/bc/FT-ALL-ant_exp-bc-FFA-20-1-lr0.0003-ilr0.0003
-    gc_ttt/exp/antmaze_expert/bc/FT-ALL-ant_exp-bc-FFA-20-1-lr0.0003-ilr3e-05
-    gc_ttt/exp/antmaze_expert/bc/FT-ALL-ant_exp-bc-FFA-50-1-lr0.0003-ilr0.0003
-    gc_ttt/exp/antmaze_expert/bc/FT-ALL-ant_exp-bc-FFA-50-1-lr0.0003-ilr3e-05
-    gc_ttt/exp/antmaze_expert/bc/FT-ALL-ant_exp-bc-FFA-100-1-lr0.0003-ilr0.0003
-    gc_ttt/exp/antmaze_expert/bc/FT-ALL-ant_exp-bc-FFA-100-1-lr0.0003-ilr3e-05
-    gc_ttt/exp/antmaze_expert/bc/FT-ALL-ant_exp-bc-FFA-200-1-lr0.0003-ilr0.0003
-    gc_ttt/exp/antmaze_expert/bc/FT-ALL-ant_exp-bc-FFA-200-1-lr0.0003-ilr3e-05
-    gc_ttt/exp/antmaze_expert/bc/FT-ALL-ant_exp-bc-FFAB-100-1-lr0.0003-ilr0.0003
-    gc_ttt/exp/antmaze_expert/bc/FT-ALL-ant_exp-bc-FFAB-100-1-lr0.0003-ilr3e-05
+    exp/antmaze_stitch/iql_ddpgbc/FT-ALL-ant_sti-ddpgbc-FFAB-100-1-lr0.0003-ilr0.0003
+    exp/antmaze_stitch/iql_ddpgbc/FT-ALL-ant_sti-ddpgbc-JTA-1-1-lr0.0003-ilr0.0003
+    exp/antmaze_stitch/iql_ddpgbc/FT-ALL-ant_sti-ddpgbc-JTA-10-1-lr0.0003-ilr0.0003
+    exp/antmaze_stitch/iql_ddpgbc/FT-ALL-ant_sti-ddpgbc-JTA-20-1-lr0.0003-ilr0.0003
+    exp/antmaze_stitch/iql_ddpgbc/FT-ALL-ant_sti-ddpgbc-JTA-50-1-lr0.0003-ilr0.0003
+    exp/antmaze_stitch/iql_ddpgbc/FT-ALL-ant_sti-ddpgbc-JTA-100-1-lr0.0003-ilr0.0003
+    exp/antmaze_stitch/iql_ddpgbc/FT-ALL-ant_sti-ddpgbc-JTA-200-1-lr0.0003-ilr0.0003
+    exp/antmaze_stitch/iql_ddpgbc/FT-ALL-ant_sti-ddpgbc-JTAB-100-1-lr0.0003-ilr0.0003
 )
 
 for path in "${model_paths[@]}"; do
-    bash scripts/send_eval_jobs.sh antmaze_expert bc "$path"
+    bash scripts/send_eval_jobs.sh antmaze_stitch iql_ddpgbc default False "$path"
 done
 ```
 
@@ -232,9 +226,3 @@ for lr in 3e-05 1e-04 3e-04 1e-03 3e-03; do
     done
 done
 ```
-
-for lr in 3e-05 1e-04 3e-04 1e-03 3e-03; do
-    for actor_only in True False; do
-        bash scripts/send_eval_jobs.sh  pointmaze_stitch iql_ddpgbc $lr $actor_only
-    done
-done
