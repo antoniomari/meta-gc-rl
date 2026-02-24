@@ -272,6 +272,7 @@ def plot_mean_success_over_checkpoints(
     figsize=(6, 4),
     fontsize: int = 18,
     figure_path: str = None,
+    is_pretraining: bool = False,
 ):
     """
     Plot the mean and standard deviation of a result metric (e.g., overall_success)
@@ -373,7 +374,10 @@ def plot_mean_success_over_checkpoints(
                 all_steps, mean_success - std_error, mean_success + std_error,
                 color=color, alpha=0.15)
 
-    plt.xlabel('Post-training Steps (Millions)')
+    if is_pretraining:
+        plt.xlabel('Pre-training Steps (Millions)')
+    else:
+        plt.xlabel('Post-training Steps (Millions)')
     plt.ylabel('Mean Success Rate')
     plt.title(f"Algo: {group_label}")
     plt.legend()
@@ -461,7 +465,7 @@ def compute_mean_success_and_std_error(
                 "TTT_steps": ttt_steps,
                 "meta_steps": meta_steps,
                 "mean_success": mean_success,
-                "std_error": stderr_success,
+                "std_error": ci95_success,
                 "n_seeds": n_valid
             })
 
@@ -543,6 +547,7 @@ def plot_max_overall_success_vs_ttt_steps(
     fontsize: int = 20,
     show_legend: bool = True,
     allow_nan: bool = False,
+    legend_fontsize: int = 20,
 ):
     """
     For all (settings,results) pairs in group_results, plot the maximum of the mean overall_success across steps.
@@ -741,7 +746,10 @@ def plot_max_overall_success_vs_ttt_steps(
         ax.set_ylim(ylim)
 
     if show_legend:
-        legend_fontsize = fontsize - 2
+        if legend_fontsize is None:
+            legend_fontsize = fontsize - 2
+        else:
+            legend_fontsize = legend_fontsize
         ax.legend(fontsize=legend_fontsize)
 
     ax.grid(True)

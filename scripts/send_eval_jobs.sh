@@ -28,8 +28,8 @@ if [[ -n "$restore_path_base_arg" ]]; then
     # A post-trained model is saved every 5k steps
     restore_epochs=(5000 10000 15000 20000 25000 30000 35000 40000 45000 50000)
 else
-    # A pre-trained model is saved every 50k steps, we just evaluate the last ones up to 500k
-    restore_epochs=(400000)   # (50000 100000 150000 200000 250000 300000 350000 400000 450000 500000)
+    # Pretrained models are saved every 50k steps
+    restore_epochs=(50000 100000 150000 200000 250000 300000 350000 400000 450000 500000)  # (400000)
 fi
 
 # 3 seeds -> fixed

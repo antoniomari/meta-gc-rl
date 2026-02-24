@@ -162,7 +162,7 @@ After meta-finetuning completes, evaluate the finetuned models using the same
 third argument:
 
 ```bash
-bash scripts/send_eval_jobs.sh <env> <model> <restore_path_base>
+bash scripts/send_eval_jobs.sh <env> <model> <test_lr> <actor_only> <restore_path_base>
 ```
 
 | Argument             | Description                                                        |
